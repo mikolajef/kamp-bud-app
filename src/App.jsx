@@ -1018,6 +1018,46 @@ const EMPTY_LEAD = () => ({
   kontakty:0,
 });
 
+// Global CRM input components — defined OUTSIDE CRMPanel to prevent remount on render
+const TI2 = ({v,set,ph,style={}}) => (
+  <input value={v||""} onChange={e=>set(e.target.value)} placeholder={ph||""}
+    style={{width:"100%",padding:"4px 7px",border:"1px solid #e8e8e3",borderRadius:4,
+      fontSize:11,fontFamily:ff,outline:"none",boxSizing:"border-box",...style}}
+    onFocus={e=>e.target.style.borderColor="#9ec417"}
+    onBlur={e=>e.target.style.borderColor="#e8e8e3"}/>
+);
+const TS2 = ({v,set,opts,cm}) => {
+  const sc=(cm||{})[v]||{};
+  return (
+    <select value={v||""} onChange={e=>set(e.target.value)}
+      style={{width:"100%",padding:"4px 7px",border:"1px solid #e8e8e3",borderRadius:4,
+        fontSize:11,fontFamily:ff,outline:"none",background:sc.bg||"white",
+        color:sc.color||"#1a1a1a",fontWeight:sc.bg?700:400,cursor:"pointer"}}>
+      {opts.map(o=><option key={o} value={o} style={{background:"white",color:"#1a1a1a",fontWeight:400}}>{o}</option>)}
+    </select>
+  );
+};
+
+// ── CRM action status options with colors ─────────────────────────────────
+const CRM_ACTION_OPTIONS = [
+  "Oferta przesłana","Ponowienie kontaktu","Klient zadał pytania",
+  "Odpowiedź wysłana","Umówiono spotkanie","Po spotkaniu – czeka",
+  "Rezygnacja z oferty","Brak odpowiedzi","Finalizacja","Zrealizowano",
+];
+const CRM_ACTION_STYLES = {
+  "Oferta przesłana":      {bg:"#dbeeff",color:"#1a6abf",border:"#a8cff0"},
+  "Ponowienie kontaktu":   {bg:"#fdf6e3",color:"#92680a",border:"#f0d898"},
+  "Klient zadał pytania":  {bg:"#f0eafb",color:"#6b3db0",border:"#d9c8f0"},
+  "Odpowiedź wysłana":     {bg:"#dbeeff",color:"#1a6abf",border:"#a8cff0"},
+  "Umówiono spotkanie":    {bg:"#e6fbd0",color:"#3a7d1e",border:"#b2e890"},
+  "Po spotkaniu – czeka":  {bg:"#eef6d0",color:"#4a7009",border:"#c8e87a"},
+  "Rezygnacja z oferty":   {bg:"#fbe8e8",color:"#b91c1c",border:"#fca5a5"},
+  "Brak odpowiedzi":       {bg:"#f0f0f0",color:"#6b7280",border:"#d1d5db"},
+  "Finalizacja":           {bg:"#c8eac8",color:"#1a5c1a",border:"#7ec87e"},
+  "Zrealizowano":          {bg:"#c8eac8",color:"#1a5c1a",border:"#7ec87e"},
+};
+
+
 function CRMScreen({ onBack }) {
   const [saveStatus, setSaveStatus] = useState(null);
 
@@ -1107,45 +1147,6 @@ function CRMScreen({ onBack }) {
     </>
   );
 }
-
-// Global CRM input components — defined OUTSIDE CRMPanel to prevent remount on render
-const TI2 = ({v,set,ph,style={}}) => (
-  <input value={v||""} onChange={e=>set(e.target.value)} placeholder={ph||""}
-    style={{width:"100%",padding:"4px 7px",border:"1px solid #e8e8e3",borderRadius:4,
-      fontSize:11,fontFamily:ff,outline:"none",boxSizing:"border-box",...style}}
-    onFocus={e=>e.target.style.borderColor="#9ec417"}
-    onBlur={e=>e.target.style.borderColor="#e8e8e3"}/>
-);
-const TS2 = ({v,set,opts,cm}) => {
-  const sc=(cm||{})[v]||{};
-  return (
-    <select value={v||""} onChange={e=>set(e.target.value)}
-      style={{width:"100%",padding:"4px 7px",border:"1px solid #e8e8e3",borderRadius:4,
-        fontSize:11,fontFamily:ff,outline:"none",background:sc.bg||"white",
-        color:sc.color||"#1a1a1a",fontWeight:sc.bg?700:400,cursor:"pointer"}}>
-      {opts.map(o=><option key={o} value={o} style={{background:"white",color:"#1a1a1a",fontWeight:400}}>{o}</option>)}
-    </select>
-  );
-};
-
-// ── CRM action status options with colors ─────────────────────────────────
-const CRM_ACTION_OPTIONS = [
-  "Oferta przesłana","Ponowienie kontaktu","Klient zadał pytania",
-  "Odpowiedź wysłana","Umówiono spotkanie","Po spotkaniu – czeka",
-  "Rezygnacja z oferty","Brak odpowiedzi","Finalizacja","Zrealizowano",
-];
-const CRM_ACTION_STYLES = {
-  "Oferta przesłana":      {bg:"#dbeeff",color:"#1a6abf",border:"#a8cff0"},
-  "Ponowienie kontaktu":   {bg:"#fdf6e3",color:"#92680a",border:"#f0d898"},
-  "Klient zadał pytania":  {bg:"#f0eafb",color:"#6b3db0",border:"#d9c8f0"},
-  "Odpowiedź wysłana":     {bg:"#dbeeff",color:"#1a6abf",border:"#a8cff0"},
-  "Umówiono spotkanie":    {bg:"#e6fbd0",color:"#3a7d1e",border:"#b2e890"},
-  "Po spotkaniu – czeka":  {bg:"#eef6d0",color:"#4a7009",border:"#c8e87a"},
-  "Rezygnacja z oferty":   {bg:"#fbe8e8",color:"#b91c1c",border:"#fca5a5"},
-  "Brak odpowiedzi":       {bg:"#f0f0f0",color:"#6b7280",border:"#d1d5db"},
-  "Finalizacja":           {bg:"#c8eac8",color:"#1a5c1a",border:"#7ec87e"},
-  "Zrealizowano":          {bg:"#c8eac8",color:"#1a5c1a",border:"#7ec87e"},
-};
 
 function CRMPanel({ onDataChange }) {
   const CRM_STATUS_COLORS = {
