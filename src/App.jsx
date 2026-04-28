@@ -1,5 +1,21 @@
 import React, { useState, useEffect, useRef } from "react";
 
+class ErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(e) { return { error: e }; }
+  render() {
+    if (this.state.error) return (
+      <div style={{padding:40,fontFamily:"monospace",background:"#fff0f0",minHeight:"100vh"}}>
+        <h2 style={{color:"red",marginBottom:16}}>Błąd aplikacji</h2>
+        <pre style={{background:"#fee",padding:16,borderRadius:8,fontSize:12,whiteSpace:"pre-wrap"}}>
+          {this.state.error?.toString()}{"\n\n"}{this.state.error?.stack}
+        </pre>
+      </div>
+    );
+    return this.props.children;
+  }
+}
+
 
 const C = {
   navBg: "#1a1a1a",
@@ -595,10 +611,10 @@ function ProjectSheet({ projectId, onBack }) {
               {["NETTO","VAT 8%","BRUTTO"].map(h=><div key={h} style={{textAlign:"right",fontWeight:700,fontSize:10,color:C.textMuted,textTransform:"uppercase"}}>{h}</div>)}
               <div style={{gridColumn:"1/-1",borderTop:`1px solid ${C.border}`,margin:"3px 0"}}/>
               {[["DOM – STAN DEWELOPERSKI",domN],["ZMIANY W ZAKRESIE PRAC",zmN],["DODATKOWE ZMIANY",exN],["GARAŻ",garazN],["TARAS",tarasN],["GANEK/WYKUSZ",ganekN],["DETALE ARCHITEKTONICZNE",detN]].map(([l,n])=>(
-                <React.Fragment key={l}>
+                <div key={l} style={{display:"contents"}}>
                   <div style={{fontSize:11,color:C.textMain,paddingTop:2,textTransform:"uppercase",letterSpacing:".2px"}}>{l}</div><div/>
                   {[n,n*.08,n*1.08].map((v,j)=><div key={j} style={{textAlign:"right",fontFamily:"'Barlow Condensed',monospace",paddingTop:2,color:C.textMain}}>{Math.round(v).toLocaleString("pl-PL")} zł</div>)}
-                </React.Fragment>
+                </div>
               ))}
               <div style={{gridColumn:"1/-1",borderTop:`2px solid ${C.green}`,margin:"4px 0"}}/>
               <div style={{fontWeight:800,color:C.greenDark,fontFamily:"'Barlow Condensed',sans-serif",textTransform:"uppercase"}}>SUMA</div><div/>
@@ -1057,6 +1073,494 @@ const CRM_ACTION_STYLES = {
   "Zrealizowano":          {bg:"#c8eac8",color:"#1a5c1a",border:"#7ec87e"},
 };
 
+
+
+// ─── ZAKUPY (MATERIAŁY) ───────────────────────────────────────────────────────
+const ZAKUPY_KEY = "kamp-bud-zakupy";
+const KATEGORIE_MAT = ["Konstrukcja Stalowa","Drewno Konstrukcyjne","Płyta OSB","Płyta GK","Wkręty Konstrukcyjne","Śruby","Instalacje Elektryczne","Wod-Kan","Wentylacja","Klimatyzacja","Komin","Ocieplenia","Blachodachówka","Inne"];
+const PROJEKTY_IDS   = ["A1","B2","C3","D4","E5","D6","Ogólne"];
+const JEDNOSTKI      = ["kg","mb","m²","szt.","litr","kpl.","inne"];
+const DOSTAWCY_SEED  = ["Castorama","Leroy Merlin","Obi","elektroMax","elektrex","pan heniek","pan zbyszek","pani halina","pani elżbieta","Tartak u gienka","Tartak u mietka","Inny"];
+
+const EMPTY_MAT = () => ({
+  id:Date.now(), data:"", material:"", kategoria:"Konstrukcja Stalowa",
+  dostawca:"Castorama", ilosc:"", jednostka:"szt.", cenajed:"", przeznaczenie:"A1", notatki:""
+});
+const EMPTY_KOST = () => ({
+  id:Date.now(), data:"", opis:"", kwota:"", komentarz:"", przeznaczenie:"A1"
+});
+
+const ZI = ({v,set,ph,type="text",style={}}) => (
+  <input type={type} value={v||""} onChange={e=>set(e.target.value)} placeholder={ph||""}
+    style={{width:"100%",padding:"4px 7px",border:"1px solid #e8e8e3",borderRadius:4,
+      fontSize:11,fontFamily:ff,outline:"none",boxSizing:"border-box",...style}}
+    onFocus={e=>e.target.style.borderColor="#9ec417"}
+    onBlur={e=>e.target.style.borderColor="#e8e8e3"}/>
+);
+const ZS = ({v,set,opts}) => (
+  <select value={v||""} onChange={e=>set(e.target.value)}
+    style={{width:"100%",padding:"4px 7px",border:"1px solid #e8e8e3",borderRadius:4,
+      fontSize:11,fontFamily:ff,outline:"none",cursor:"pointer"}}>
+    {opts.map(o=><option key={o} value={o}>{o}</option>)}
+  </select>
+);
+
+function ZakupyPanel() {
+  const BRANZE = ["Ogólnobudowlane","Elektryczna","Drewno","Metalowa","Instalacyjna","Hydrauliczna","Dachowa","Izolacyjna","Transport","Inne"];
+
+  const loadData = () => {
+    for (const s of [sessionStorage,localStorage]) {
+      try { const r=s.getItem(ZAKUPY_KEY); if(r) return JSON.parse(r); } catch(e) {}
+    }
+    return {
+      dostawcy: [
+        {id:1,nazwa:"Castorama",     branza:"Ogólnobudowlane"},
+        {id:2,nazwa:"Leroy Merlin",  branza:"Ogólnobudowlane"},
+        {id:3,nazwa:"Obi",           branza:"Ogólnobudowlane"},
+        {id:4,nazwa:"elektroMax",    branza:"Elektryczna"},
+        {id:5,nazwa:"elektrex",      branza:"Elektryczna"},
+        {id:6,nazwa:"pan heniek",    branza:"Metalowa"},
+        {id:7,nazwa:"pan zbyszek",   branza:"Instalacyjna"},
+        {id:8,nazwa:"pani halina",   branza:"Metalowa"},
+        {id:9,nazwa:"pani elżbieta", branza:"Drewno"},
+        {id:10,nazwa:"Tartak u gienka",branza:"Drewno"},
+        {id:11,nazwa:"Tartak u mietka",branza:"Drewno"},
+      ],
+      materialy: [
+        {id:1,data:"2026-02-25",material:"Dwuteownik 240",   kategoria:"Konstrukcja Stalowa",   dostawca:"Castorama",        ilosc:"1500",jednostka:"kg",  cenajed:"8",   przeznaczenie:"A1",notatki:""},
+        {id:2,data:"2026-02-25",material:"Dwuteownik 80",    kategoria:"Konstrukcja Stalowa",   dostawca:"Castorama",        ilosc:"700", jednostka:"kg",  cenajed:"6",   przeznaczenie:"A1",notatki:""},
+        {id:3,data:"2026-02-25",material:"Profil 40x40x3",   kategoria:"Konstrukcja Stalowa",   dostawca:"Castorama",        ilosc:"800", jednostka:"mb",  cenajed:"22",  przeznaczenie:"D4",notatki:""},
+        {id:4,data:"2026-02-25",material:"Profil 40x20x3",   kategoria:"Konstrukcja Stalowa",   dostawca:"Obi",              ilosc:"100", jednostka:"mb",  cenajed:"14",  przeznaczenie:"D4",notatki:""},
+        {id:5,data:"2026-02-25",material:"Deska 17x4,5x600", kategoria:"Drewno Konstrukcyjne",  dostawca:"Tartak u gienka",  ilosc:"100", jednostka:"szt.",cenajed:"140", przeznaczenie:"D4",notatki:""},
+        {id:6,data:"2026-02-25",material:"Deska 17x4,5x510", kategoria:"Drewno Konstrukcyjne",  dostawca:"Tartak u gienka",  ilosc:"80",  jednostka:"szt.",cenajed:"125", przeznaczenie:"A1",notatki:""},
+        {id:7,data:"2026-02-25",material:"Płyta OSB 10mm",   kategoria:"Płyta OSB",             dostawca:"Leroy Merlin",     ilosc:"80",  jednostka:"m²",  cenajed:"28",  przeznaczenie:"B2",notatki:""},
+        {id:8,data:"2026-02-25",material:"Płyta GK Zwykła",  kategoria:"Płyta GK",              dostawca:"Leroy Merlin",     ilosc:"250", jednostka:"m²",  cenajed:"25",  przeznaczenie:"A1",notatki:""},
+        {id:9,data:"2026-03-29",material:"Kabel 3x1,5",      kategoria:"Instalacje Elektryczne",dostawca:"elektroMax",       ilosc:"800", jednostka:"mb",  cenajed:"3",   przeznaczenie:"B2",notatki:""},
+        {id:10,data:"2026-04-01",material:"Komin do Kominka", kategoria:"Komin",                 dostawca:"pan heniek",       ilosc:"1",   jednostka:"szt.",cenajed:"7000",przeznaczenie:"B2",notatki:""},
+      ],
+      inne: [
+        {id:1,data:"2026-03-25",opis:"Porada dot. zgód",    kwota:"200", komentarz:"dot. zgód",           przeznaczenie:"A1"},
+        {id:2,data:"2026-03-28",opis:"Zmiana w projekcie",  kwota:"3500",komentarz:"zmiana w projekcie",  przeznaczenie:"A1"},
+      ]
+    };
+  };
+
+  const [data,    setData]    = useState(loadData);
+  const [tab,     setTab]     = useState("materialy");
+  const [filterProj, setFilterProj] = useState("ALL");
+  const [filterKat,  setFilterKat]  = useState("ALL");
+  const [showAddMat,  setShowAddMat]  = useState(false);
+  const [showAddInn,  setShowAddInn]  = useState(false);
+  const [newMat,  setNewMat]  = useState(EMPTY_MAT);
+  const [newInn,  setNewInn]  = useState(EMPTY_KOST);
+  const [newSup,  setNewSup]  = useState({nazwa:"",branza:"Ogólnobudowlane"});
+
+  const save = (d) => {
+    const ser=JSON.stringify(d);
+    try{sessionStorage.setItem(ZAKUPY_KEY,ser);}catch(e){}
+    try{localStorage.setItem(ZAKUPY_KEY,ser);}catch(e){}
+    if(window.storage) window.storage.set(ZAKUPY_KEY,ser).catch(()=>{});
+  };
+
+  const addMat = () => {
+    const next={...data,materialy:[...data.materialy,{...newMat,id:Date.now()}]};
+    setData(next);save(next);setNewMat(EMPTY_MAT());setShowAddMat(false);
+  };
+  const addInn = () => {
+    const next={...data,inne:[...data.inne,{...newInn,id:Date.now()}]};
+    setData(next);save(next);setNewInn(EMPTY_KOST());setShowAddInn(false);
+  };
+  const delMat = id => { const next={...data,materialy:data.materialy.filter(r=>r.id!==id)};setData(next);save(next); };
+  const delInn = id => { const next={...data,inne:data.inne.filter(r=>r.id!==id)};setData(next);save(next); };
+  const addSup = () => {
+    if(!newSup.nazwa.trim()) return;
+    const next={...data,dostawcy:[...data.dostawcy,{id:Date.now(),...newSup}]};
+    setData(next);save(next);setNewSup({nazwa:"",branza:"Ogólnobudowlane"});
+  };
+  const delSup = id => { const next={...data,dostawcy:data.dostawcy.filter(d=>d.id!==id)};setData(next);save(next); };
+  const updMat = (id,field,val) => {
+    const next={...data,materialy:data.materialy.map(r=>r.id===id?{...r,[field]:val}:r)};
+    setData(next);save(next);
+  };
+  const updInn = (id,field,val) => {
+    const next={...data,inne:data.inne.map(r=>r.id===id?{...r,[field]:val}:r)};
+    setData(next);save(next);
+  };
+
+  // Build project options from PROJECT_DEFAULTS — use fullKod style
+  const projOptions = Object.entries(PROJECT_DEFAULTS).map(([id,def])=>{
+    const suffix = (def.kod||id).startsWith(id)?(def.kod||id).slice(id.length).replace(/^\s*-\s*/,''):(def.kod||id);
+    return { value:id, label:suffix.trim()?`${id} - ${suffix.trim().toUpperCase()}`:id };
+  });
+
+  const supNames = data.dostawcy.map(d=>d.nazwa);
+
+  const filtMat  = data.materialy.filter(r=>(filterProj==="ALL"||r.przeznaczenie===filterProj)&&(filterKat==="ALL"||r.kategoria===filterKat));
+  const filtInn  = data.inne.filter(r=>filterProj==="ALL"||r.przeznaczenie===filterProj);
+  const sumaMat  = filtMat.reduce((s,r)=>s+(+r.ilosc||0)*(+r.cenajed||0),0);
+  const sumaInn  = filtInn.reduce((s,r)=>s+(+r.kwota||0),0);
+
+  const inp = (v,set,ph,type="text") => (
+    <input type={type} value={v||""} onChange={e=>set(e.target.value)} placeholder={ph||""}
+      style={{width:"100%",padding:"4px 7px",border:"1px solid #e8e8e3",borderRadius:4,
+        fontSize:11,fontFamily:ff,outline:"none",boxSizing:"border-box"}}
+      onFocus={e=>e.target.style.borderColor="#9ec417"}
+      onBlur={e=>e.target.style.borderColor="#e8e8e3"}/>
+  );
+  const sel = (v,set,opts) => (
+    <select value={v||""} onChange={e=>set(e.target.value)}
+      style={{width:"100%",padding:"4px 7px",border:"1px solid #e8e8e3",borderRadius:4,
+        fontSize:11,fontFamily:ff,outline:"none",cursor:"pointer",background:"white"}}>
+      {opts.map(o=>typeof o==="string"
+        ?<option key={o} value={o}>{o}</option>
+        :<option key={o.value} value={o.value}>{o.label}</option>)}
+    </select>
+  );
+
+  const TH = ({c,style={}}) => (
+    <th style={{background:"#1a1a1a",color:"rgba(255,255,255,.75)",padding:"6px 8px",
+      fontSize:9,fontWeight:700,letterSpacing:"0.8px",textAlign:"left",
+      fontFamily:ff,whiteSpace:"nowrap",...style}}>{c}</th>
+  );
+
+  return (
+    <div style={{display:"grid",gridTemplateColumns:"1fr 220px",gap:16,alignItems:"start"}}>
+
+      {/* ── LEFT: main tables ── */}
+      <div>
+        {/* Tab bar */}
+        <div style={{display:"flex",gap:6,marginBottom:10,flexWrap:"wrap",alignItems:"center"}}>
+          {[["materialy","MATERIAŁY",data.materialy.length],["inne","INNE",data.inne.length]].map(([k,lbl,cnt])=>(
+            <button key={k} onClick={()=>setTab(k)}
+              style={{padding:"4px 12px",borderRadius:5,fontFamily:ff,fontWeight:700,fontSize:10,
+                letterSpacing:".5px",cursor:"pointer",outline:"none",
+                border:`1.5px solid ${tab===k?"#9ec417":"#e8e8e3"}`,
+                background:tab===k?"#eef6d0":"#fff",color:tab===k?"#4a7009":"#6b7280"}}>
+              {lbl}
+              <span style={{background:tab===k?"#9ec417":"#f0f0ec",color:tab===k?"#1a1a1a":"#6b7280",
+                borderRadius:3,padding:"0 5px",fontSize:10,fontWeight:900,marginLeft:4}}>{cnt}</span>
+            </button>
+          ))}
+          <div style={{marginLeft:"auto",display:"flex",gap:6,flexWrap:"wrap"}}>
+            <select value={filterProj} onChange={e=>setFilterProj(e.target.value)}
+              style={{padding:"4px 8px",borderRadius:4,border:"1px solid #e8e8e3",fontSize:10,
+                fontFamily:ff,fontWeight:700,cursor:"pointer",color:"#6b7280",outline:"none",background:"white"}}>
+              <option value="ALL">WSZYSTKIE PROJEKTY</option>
+              {projOptions.map(p=><option key={p.value} value={p.value}>{p.label}</option>)}
+            </select>
+            {tab==="materialy"&&(
+              <select value={filterKat} onChange={e=>setFilterKat(e.target.value)}
+                style={{padding:"4px 8px",borderRadius:4,border:"1px solid #e8e8e3",fontSize:10,
+                  fontFamily:ff,fontWeight:700,cursor:"pointer",color:"#6b7280",outline:"none",background:"white"}}>
+                <option value="ALL">WSZYSTKIE KATEGORIE</option>
+                {KATEGORIE_MAT.map(k=><option key={k} value={k}>{k}</option>)}
+              </select>
+            )}
+            <button onClick={()=>tab==="materialy"?setShowAddMat(s=>!s):setShowAddInn(s=>!s)}
+              style={{padding:"4px 14px",borderRadius:5,background:"#1a1a1a",color:"#9ec417",
+                border:"none",fontFamily:ff,fontWeight:700,fontSize:10,letterSpacing:"1px",
+                cursor:"pointer",outline:"none"}}>
+              + DODAJ
+            </button>
+          </div>
+        </div>
+
+        {/* Sum bar */}
+        <div style={{background:"#eef6d0",border:"1px solid #c8e87a",borderRadius:6,
+          padding:"6px 14px",marginBottom:10,display:"flex",gap:16,flexWrap:"wrap"}}>
+          <span style={{fontSize:10,fontFamily:ff,color:"#4a7009",fontWeight:700}}>
+            {tab==="materialy"?`SUMA MATERIAŁÓW: ${Math.round(sumaMat).toLocaleString("pl-PL")} zł`:`SUMA INNE: ${Math.round(sumaInn).toLocaleString("pl-PL")} zł`}
+          </span>
+          <span style={{fontSize:10,fontFamily:ff,color:"#6b7280"}}>
+            {tab==="materialy"?filtMat.length:filtInn.length} pozycji
+          </span>
+        </div>
+
+        {/* Add form — materiały */}
+        {tab==="materialy"&&showAddMat&&(
+          <div style={{background:"white",border:"1px solid #e8e8e3",borderRadius:8,padding:14,marginBottom:12,boxShadow:"0 2px 8px rgba(0,0,0,.08)"}}>
+            <div style={{fontSize:10,fontWeight:700,color:"#9ca3af",letterSpacing:"1px",textTransform:"uppercase",marginBottom:10,fontFamily:ff}}>NOWY MATERIAŁ</div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:7,marginBottom:7}}>
+              <div><div style={{fontSize:9,color:"#9ca3af",fontFamily:ff,marginBottom:2}}>DATA</div>{inp(newMat.data,v=>setNewMat(p=>({...p,data:v})),"",     "date")}</div>
+              <div><div style={{fontSize:9,color:"#9ca3af",fontFamily:ff,marginBottom:2}}>MATERIAŁ</div>{inp(newMat.material,v=>setNewMat(p=>({...p,material:v})),"nazwa")}</div>
+              <div><div style={{fontSize:9,color:"#9ca3af",fontFamily:ff,marginBottom:2}}>KATEGORIA</div>{sel(newMat.kategoria,v=>setNewMat(p=>({...p,kategoria:v})),KATEGORIE_MAT)}</div>
+              <div><div style={{fontSize:9,color:"#9ca3af",fontFamily:ff,marginBottom:2}}>DOSTAWCA</div>{sel(newMat.dostawca,v=>setNewMat(p=>({...p,dostawca:v})),supNames)}</div>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:7,marginBottom:10}}>
+              <div><div style={{fontSize:9,color:"#9ca3af",fontFamily:ff,marginBottom:2}}>ILOŚĆ</div>{inp(newMat.ilosc,v=>setNewMat(p=>({...p,ilosc:v})),"","number")}</div>
+              <div><div style={{fontSize:9,color:"#9ca3af",fontFamily:ff,marginBottom:2}}>JEDNOSTKA</div>{sel(newMat.jednostka,v=>setNewMat(p=>({...p,jednostka:v})),JEDNOSTKI)}</div>
+              <div><div style={{fontSize:9,color:"#9ca3af",fontFamily:ff,marginBottom:2}}>CENA JED.</div>{inp(newMat.cenajed,v=>setNewMat(p=>({...p,cenajed:v})),"","number")}</div>
+              <div><div style={{fontSize:9,color:"#9ca3af",fontFamily:ff,marginBottom:2}}>PRZEZNACZENIE</div>{sel(newMat.przeznaczenie,v=>setNewMat(p=>({...p,przeznaczenie:v})),projOptions)}</div>
+              <div><div style={{fontSize:9,color:"#9ca3af",fontFamily:ff,marginBottom:2}}>NOTATKI</div>{inp(newMat.notatki,v=>setNewMat(p=>({...p,notatki:v})))}</div>
+            </div>
+            <div style={{display:"flex",gap:8,alignItems:"center"}}>
+              <button onClick={addMat} style={{padding:"6px 18px",background:"#9ec417",color:"#1a1a1a",border:"none",borderRadius:5,fontFamily:ff,fontWeight:700,fontSize:11,cursor:"pointer"}}>ZAPISZ</button>
+              <button onClick={()=>setShowAddMat(false)} style={{padding:"6px 14px",background:"white",color:"#6b7280",border:"1px solid #e8e8e3",borderRadius:5,fontFamily:ff,fontWeight:700,fontSize:11,cursor:"pointer"}}>ANULUJ</button>
+              <span style={{fontSize:10,color:"#6b7280",fontFamily:ff}}>Razem: {((+newMat.ilosc||0)*(+newMat.cenajed||0)).toLocaleString("pl-PL")} zł</span>
+            </div>
+          </div>
+        )}
+
+        {/* Add form — inne */}
+        {tab==="inne"&&showAddInn&&(
+          <div style={{background:"white",border:"1px solid #e8e8e3",borderRadius:8,padding:14,marginBottom:12,boxShadow:"0 2px 8px rgba(0,0,0,.08)"}}>
+            <div style={{fontSize:10,fontWeight:700,color:"#9ca3af",letterSpacing:"1px",textTransform:"uppercase",marginBottom:10,fontFamily:ff}}>NOWA POZYCJA</div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:7,marginBottom:10}}>
+              <div><div style={{fontSize:9,color:"#9ca3af",fontFamily:ff,marginBottom:2}}>DATA</div>{inp(newInn.data,v=>setNewInn(p=>({...p,data:v})),"","date")}</div>
+              <div><div style={{fontSize:9,color:"#9ca3af",fontFamily:ff,marginBottom:2}}>OPIS</div>{inp(newInn.opis,v=>setNewInn(p=>({...p,opis:v})),"opis")}</div>
+              <div><div style={{fontSize:9,color:"#9ca3af",fontFamily:ff,marginBottom:2}}>KWOTA (zł)</div>{inp(newInn.kwota,v=>setNewInn(p=>({...p,kwota:v})),"","number")}</div>
+              <div><div style={{fontSize:9,color:"#9ca3af",fontFamily:ff,marginBottom:2}}>PRZEZNACZENIE</div>{sel(newInn.przeznaczenie,v=>setNewInn(p=>({...p,przeznaczenie:v})),projOptions)}</div>
+              <div><div style={{fontSize:9,color:"#9ca3af",fontFamily:ff,marginBottom:2}}>KOMENTARZ</div>{inp(newInn.komentarz,v=>setNewInn(p=>({...p,komentarz:v})))}</div>
+            </div>
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={addInn} style={{padding:"6px 18px",background:"#9ec417",color:"#1a1a1a",border:"none",borderRadius:5,fontFamily:ff,fontWeight:700,fontSize:11,cursor:"pointer"}}>ZAPISZ</button>
+              <button onClick={()=>setShowAddInn(false)} style={{padding:"6px 14px",background:"white",color:"#6b7280",border:"1px solid #e8e8e3",borderRadius:5,fontFamily:ff,fontWeight:700,fontSize:11,cursor:"pointer"}}>ANULUJ</button>
+            </div>
+          </div>
+        )}
+
+        {/* Table — materiały */}
+        {tab==="materialy"&&(
+          <div style={{background:"white",border:"1px solid #e8e8e3",borderRadius:8,overflow:"hidden",boxShadow:"0 1px 3px rgba(0,0,0,.05)"}}>
+            <div style={{overflowX:"auto"}}>
+              <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+                <thead>
+                  <tr>
+                    <TH c="LP." style={{width:28,textAlign:"center"}}/>
+                    <TH c="DATA" style={{minWidth:80}}/>
+                    <TH c="MATERIAŁ" style={{minWidth:140}}/>
+                    <TH c="KATEGORIA" style={{minWidth:120}}/>
+                    <TH c="DOSTAWCA" style={{minWidth:110}}/>
+                    <TH c="ILOŚĆ" style={{minWidth:55,textAlign:"right"}}/>
+                    <TH c="JM" style={{minWidth:45}}/>
+                    <TH c="CENA JED." style={{minWidth:75,textAlign:"right"}}/>
+                    <TH c="WARTOŚĆ" style={{minWidth:85,textAlign:"right"}}/>
+                    <TH c="PRZEZNACZENIE" style={{minWidth:110}}/>
+                    <TH c="" style={{width:24}}/>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtMat.length===0&&(
+                    <tr><td colSpan={11} style={{padding:"20px",textAlign:"center",color:"#9ca3af",fontFamily:ff,fontSize:11}}>BRAK POZYCJI</td></tr>
+                  )}
+                  {filtMat.map((r,i)=>{
+                    const cena=(+r.ilosc||0)*(+r.cenajed||0);
+                    const projLabel = projOptions.find(p=>p.value===r.przeznaczenie)?.label || r.przeznaczenie;
+                    return (
+                      <tr key={r.id} style={{background:i%2===0?"white":"#fafafa",borderBottom:"1px solid #f3f4f6"}}>
+                        <td style={{textAlign:"center",color:"#9ca3af",fontSize:10,padding:"5px 6px",fontFamily:ff}}>{i+1}</td>
+                        <td style={{padding:"5px 8px",fontSize:10,color:"#6b7280",fontFamily:ff,whiteSpace:"nowrap"}}>{r.data||"—"}</td>
+                        <td style={{padding:"5px 8px",fontWeight:600,color:"#1a1a1a",fontFamily:ff}}>{r.material}</td>
+                        <td style={{padding:"5px 8px",fontSize:10,color:"#6b7280",fontFamily:ff}}>{r.kategoria}</td>
+                        <td style={{padding:"3px 5px"}}>
+                          <select value={r.dostawca||""} onChange={e=>updMat(r.id,"dostawca",e.target.value)}
+                            style={{width:"100%",padding:"3px 5px",border:"1px solid #e8e8e3",borderRadius:3,
+                              fontSize:10,fontFamily:ff,outline:"none",cursor:"pointer",background:"white"}}>
+                            {supNames.map(n=><option key={n} value={n}>{n}</option>)}
+                          </select>
+                        </td>
+                        <td style={{padding:"5px 8px",textAlign:"right",fontFamily:ff}}>{r.ilosc}</td>
+                        <td style={{padding:"5px 8px",fontSize:10,color:"#9ca3af",fontFamily:ff}}>{r.jednostka}</td>
+                        <td style={{padding:"5px 8px",textAlign:"right",fontFamily:ff}}>{r.cenajed} zł</td>
+                        <td style={{padding:"5px 8px",textAlign:"right",fontWeight:700,color:"#4a7009",fontFamily:ff,whiteSpace:"nowrap"}}>{Math.round(cena).toLocaleString("pl-PL")} zł</td>
+                        <td style={{padding:"3px 5px"}}>
+                          <select value={r.przeznaczenie||""} onChange={e=>updMat(r.id,"przeznaczenie",e.target.value)}
+                            style={{width:"100%",padding:"3px 5px",border:"1px solid #e8e8e3",borderRadius:3,
+                              fontSize:10,fontFamily:ff,outline:"none",cursor:"pointer",background:"white"}}>
+                            {projOptions.map(p=><option key={p.value} value={p.value}>{p.label}</option>)}
+                          </select>
+                        </td>
+                        <td style={{padding:"3px 6px",textAlign:"center"}}>
+                          <button onClick={()=>delMat(r.id)} style={{background:"none",border:"none",color:"#9ca3af",fontSize:13,cursor:"pointer",lineHeight:1,padding:2}}>×</button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <div style={{background:"#eef6d0",borderTop:"2px solid #c8e87a",padding:"7px 14px",
+              display:"flex",justifyContent:"flex-end",fontSize:11,fontWeight:700,color:"#4a7009",fontFamily:ff}}>
+              SUMA: {Math.round(sumaMat).toLocaleString("pl-PL")} zł
+            </div>
+          </div>
+        )}
+
+        {/* Table — inne */}
+        {tab==="inne"&&(
+          <div style={{background:"white",border:"1px solid #e8e8e3",borderRadius:8,overflow:"hidden",boxShadow:"0 1px 3px rgba(0,0,0,.05)"}}>
+            <div style={{overflowX:"auto"}}>
+              <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+                <thead>
+                  <tr>
+                    <TH c="LP." style={{width:28,textAlign:"center"}}/>
+                    <TH c="DATA" style={{minWidth:80}}/>
+                    <TH c="OPIS" style={{minWidth:180}}/>
+                    <TH c="KWOTA" style={{minWidth:90,textAlign:"right"}}/>
+                    <TH c="KOMENTARZ" style={{minWidth:140}}/>
+                    <TH c="PRZEZNACZENIE" style={{minWidth:110}}/>
+                    <TH c="" style={{width:24}}/>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtInn.length===0&&(
+                    <tr><td colSpan={7} style={{padding:"20px",textAlign:"center",color:"#9ca3af",fontFamily:ff,fontSize:11}}>BRAK POZYCJI</td></tr>
+                  )}
+                  {filtInn.map((r,i)=>(
+                    <tr key={r.id} style={{background:i%2===0?"white":"#fafafa",borderBottom:"1px solid #f3f4f6"}}>
+                      <td style={{textAlign:"center",color:"#9ca3af",fontSize:10,padding:"5px 6px",fontFamily:ff}}>{i+1}</td>
+                      <td style={{padding:"5px 8px",fontSize:10,color:"#6b7280",fontFamily:ff,whiteSpace:"nowrap"}}>{r.data||"—"}</td>
+                      <td style={{padding:"5px 8px",fontWeight:600,color:"#1a1a1a",fontFamily:ff}}>{r.opis}</td>
+                      <td style={{padding:"5px 8px",textAlign:"right",fontWeight:700,color:"#4a7009",fontFamily:ff,whiteSpace:"nowrap"}}>{(+r.kwota||0).toLocaleString("pl-PL")} zł</td>
+                      <td style={{padding:"5px 8px",fontSize:10,color:"#6b7280",fontFamily:ff}}>{r.komentarz}</td>
+                      <td style={{padding:"3px 5px"}}>
+                        <select value={r.przeznaczenie||""} onChange={e=>updInn(r.id,"przeznaczenie",e.target.value)}
+                          style={{width:"100%",padding:"3px 5px",border:"1px solid #e8e8e3",borderRadius:3,
+                            fontSize:10,fontFamily:ff,outline:"none",cursor:"pointer",background:"white"}}>
+                          {projOptions.map(p=><option key={p.value} value={p.value}>{p.label}</option>)}
+                        </select>
+                      </td>
+                      <td style={{padding:"3px 6px",textAlign:"center"}}>
+                        <button onClick={()=>delInn(r.id)} style={{background:"none",border:"none",color:"#9ca3af",fontSize:13,cursor:"pointer",lineHeight:1,padding:2}}>×</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div style={{background:"#eef6d0",borderTop:"2px solid #c8e87a",padding:"7px 14px",
+              display:"flex",justifyContent:"flex-end",fontSize:11,fontWeight:700,color:"#4a7009",fontFamily:ff}}>
+              SUMA: {Math.round(sumaInn).toLocaleString("pl-PL")} zł
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── RIGHT: suppliers panel ── */}
+      <div style={{background:"white",border:"1px solid #e8e8e3",borderRadius:8,overflow:"hidden",
+        boxShadow:"0 1px 3px rgba(0,0,0,.05)",position:"sticky",top:16}}>
+        <div style={{background:"#1a1a1a",padding:"9px 12px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <span style={{color:"rgba(255,255,255,.7)",fontSize:9,fontWeight:700,letterSpacing:"1.2px",textTransform:"uppercase",fontFamily:ff}}>DOSTAWCY</span>
+        </div>
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+          <thead>
+            <tr style={{borderBottom:"1px solid #f3f4f6"}}>
+              <th style={{padding:"5px 10px",fontSize:8,fontWeight:700,color:"#9ca3af",letterSpacing:".5px",textTransform:"uppercase",textAlign:"left",fontFamily:ff}}>NAZWA</th>
+              <th style={{padding:"5px 10px",fontSize:8,fontWeight:700,color:"#9ca3af",letterSpacing:".5px",textTransform:"uppercase",textAlign:"left",fontFamily:ff}}>BRANŻA</th>
+              <th style={{width:24}}></th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.dostawcy.map((d,i)=>(
+              <tr key={d.id} style={{borderBottom:"1px solid #f3f4f6",background:i%2===0?"white":"#fafafa"}}>
+                <td style={{padding:"5px 10px",fontSize:10,fontWeight:600,color:"#1a1a1a",fontFamily:ff}}>{d.nazwa}</td>
+                <td style={{padding:"5px 10px",fontSize:9,color:"#9ca3af",fontFamily:ff}}>{d.branza}</td>
+                <td style={{padding:"3px 6px",textAlign:"center"}}>
+                  <button onClick={()=>delSup(d.id)} style={{background:"none",border:"none",color:"#9ca3af",fontSize:12,cursor:"pointer",lineHeight:1}}>×</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {/* Add new supplier */}
+        <div style={{padding:"8px 10px",borderTop:"1px solid #e8e8e3",display:"flex",flexDirection:"column",gap:5}}>
+          <input value={newSup.nazwa} onChange={e=>setNewSup(p=>({...p,nazwa:e.target.value}))}
+            placeholder="nazwa dostawcy"
+            style={{width:"100%",padding:"4px 7px",border:"1px solid #e8e8e3",borderRadius:4,
+              fontSize:10,fontFamily:ff,outline:"none"}}
+            onFocus={e=>e.target.style.borderColor="#9ec417"}
+            onBlur={e=>e.target.style.borderColor="#e8e8e3"}/>
+          <div style={{display:"flex",gap:5}}>
+            <select value={newSup.branza} onChange={e=>setNewSup(p=>({...p,branza:e.target.value}))}
+              style={{flex:1,padding:"4px 6px",border:"1px solid #e8e8e3",borderRadius:4,
+                fontSize:10,fontFamily:ff,outline:"none",cursor:"pointer",background:"white"}}>
+              {BRANZE.map(b=><option key={b} value={b}>{b}</option>)}
+            </select>
+            <button onClick={addSup}
+              style={{padding:"4px 10px",background:"#9ec417",color:"#1a1a1a",border:"none",
+                borderRadius:4,fontFamily:ff,fontWeight:700,fontSize:10,cursor:"pointer"}}>
+              +
+            </button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  );
+}
+
+function ZakupyScreen({ onBack }) {
+  const [saveStatus, setSaveStatus] = useState(null);
+
+  const handleSave = () => {
+    setSaveStatus('saving');
+    for (const store of [sessionStorage, localStorage]) {
+      try {
+        const raw = store.getItem(ZAKUPY_KEY);
+        if (raw) { if(window.storage) window.storage.set(ZAKUPY_KEY, raw).catch(()=>{}); break; }
+      } catch(e) {}
+    }
+    setSaveStatus('saved');
+    setTimeout(() => setSaveStatus(null), 2500);
+  };
+
+  return (
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&display=swap');
+        *{box-sizing:border-box;margin:0;padding:0;}
+        body{background:#f4f4f0;font-family:'Barlow Condensed',sans-serif;}
+        input,select{font-family:'Barlow Condensed',sans-serif;}
+        input:focus,select:focus{outline:none;border-color:#9ec417!important;}
+      `}</style>
+      <nav style={{background:"#1a1a1a",padding:"0 24px",display:"flex",alignItems:"center",
+        height:54,boxShadow:"0 2px 6px rgba(0,0,0,.25)"}}>
+        <Logo/>
+        <div style={{color:"rgba(255,255,255,.18)",fontSize:20,margin:"0 16px"}}>|</div>
+        <div style={{color:"rgba(255,255,255,.5)",fontSize:12,fontWeight:600,letterSpacing:"2px",
+          textTransform:"uppercase",fontFamily:ff}}>System Projektowy</div>
+        <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:12}}>
+          <div style={{color:"rgba(255,255,255,.28)",fontSize:11,letterSpacing:"1px",fontFamily:ff}}>ZAKUPY</div>
+          {onBack && (
+            <button onClick={onBack} style={{
+              background:"transparent",border:"1px solid rgba(255,255,255,.3)",
+              color:"rgba(255,255,255,.7)",padding:"5px 14px",borderRadius:4,cursor:"pointer",
+              fontFamily:ff,fontWeight:700,fontSize:12,letterSpacing:"1px",textTransform:"uppercase",outline:"none",
+            }}
+            onMouseOver={e=>{e.target.style.background="rgba(255,255,255,.1)";e.target.style.color="white";}}
+            onMouseOut={e=>{e.target.style.background="transparent";e.target.style.color="rgba(255,255,255,.7)";}}>
+              ← WSZYSTKIE PROJEKTY
+            </button>
+          )}
+        </div>
+      </nav>
+      <div style={{maxWidth:1280,margin:"0 auto",padding:"24px 28px 80px"}}>
+        <div style={{marginBottom:20,paddingBottom:10,borderBottom:"2px solid #e8e8e3"}}>
+          <div style={{fontSize:18,fontWeight:900,color:"#1a1a1a",letterSpacing:"-0.3px",fontFamily:ff}}>ZAKUPY</div>
+          <div style={{fontSize:10,color:"#9ca3af",letterSpacing:"1.5px",textTransform:"uppercase",marginTop:2,fontFamily:ff}}>MATERIAŁY I DODATKOWE KOSZTY</div>
+        </div>
+        <ZakupyPanel/>
+      </div>
+      {/* Floating save */}
+      <div style={{position:"fixed",bottom:24,right:24,zIndex:1000,display:"flex",alignItems:"center",gap:10}}>
+        {saveStatus==="saved" && (
+          <div style={{background:"#1a1a1a",color:"#b5e71d",padding:"7px 14px",borderRadius:6,
+            fontSize:11,fontWeight:700,letterSpacing:"1px",fontFamily:"'Barlow Condensed',sans-serif",
+            boxShadow:"0 2px 10px rgba(0,0,0,.25)"}}>✓ ZAPISANO</div>
+        )}
+        <button onClick={handleSave} disabled={saveStatus==="saving"}
+          style={{background:saveStatus==="saving"?"#7aaa0a":"#b5e71d",color:"#1a1a1a",border:"none",
+            borderRadius:7,padding:"10px 20px",cursor:saveStatus==="saving"?"wait":"pointer",
+            fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:13,
+            letterSpacing:"1px",textTransform:"uppercase",boxShadow:"0 3px 14px rgba(0,0,0,.22)"}}
+          onMouseOver={e=>{if(saveStatus!=="saving")e.currentTarget.style.background="#c8f041";}}
+          onMouseOut={e=>{if(saveStatus!=="saving")e.currentTarget.style.background="#b5e71d";}}>
+          {saveStatus==="saving"?"ZAPISUJĘ...":"💾 ZAPISZ"}
+        </button>
+      </div>
+    </>
+  );
+}
 
 function CRMScreen({ onBack }) {
   const [saveStatus, setSaveStatus] = useState(null);
@@ -1586,7 +2090,7 @@ function HomeScreen({ onSelect }) {
       <div style={{maxWidth:1280,margin:"0 auto",padding:"24px 28px 56px"}}>
 
         {/* ══ TOP ROW: PROJEKTY (left) + BAZA NOWYCH KLIENTÓW (right) ══ */}
-        <div style={{display:"grid",gridTemplateColumns:"1fr 2fr",gap:20,marginBottom:36,alignItems:"start"}}>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20,marginBottom:36,alignItems:"start"}}>
 
           {/* LEFT: PROJEKTY */}
           <div>
@@ -1724,7 +2228,8 @@ function HomeScreen({ onSelect }) {
 
 export default function App() {
   const [active, setActive] = useState(null);
-  if (active === "CRM") return <CRMScreen onBack={() => setActive(null)}/>;
-  if (active) return <ProjectSheet projectId={active} onBack={() => setActive(null)}/>;
-  return <HomeScreen onSelect={setActive}/>;
+  if (active === "CRM")    return <ErrorBoundary><CRMScreen    onBack={() => setActive(null)}/></ErrorBoundary>;
+  if (active === "ZAKUPY") return <ErrorBoundary><ZakupyScreen onBack={() => setActive(null)}/></ErrorBoundary>;
+  if (active) return <ErrorBoundary><ProjectSheet projectId={active} onBack={() => setActive(null)}/></ErrorBoundary>;
+  return <ErrorBoundary><HomeScreen onSelect={setActive}/></ErrorBoundary>;
 }
