@@ -2233,3 +2233,4 @@ export default function App() {
   if (active) return <ErrorBoundary><ProjectSheet projectId={active} onBack={() => setActive(null)}/></ErrorBoundary>;
   return <ErrorBoundary><HomeScreen onSelect={setActive}/></ErrorBoundary>;
 }
+// v2
