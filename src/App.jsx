@@ -1151,6 +1151,10 @@ function ZakupyPanel() {
   const [filterKat,  setFilterKat]  = useState("ALL");
   const [showAddMat,  setShowAddMat]  = useState(false);
   const [showAddInn,  setShowAddInn]  = useState(false);
+  const [showBulk,    setShowBulk]    = useState(false);
+  const [bulkRows,    setBulkRows]    = useState(
+    Array(5).fill(null).map(()=>({...EMPTY_MAT(),id:Math.random()}))
+  );
   const [newMat,  setNewMat]  = useState(EMPTY_MAT);
   const [newInn,  setNewInn]  = useState(EMPTY_KOST);
   const [newSup,  setNewSup]  = useState({nazwa:"",branza:"Ogólnobudowlane"});
@@ -1170,6 +1174,16 @@ function ZakupyPanel() {
     const next={...data,inne:[...data.inne,{...newInn,id:Date.now()}]};
     setData(next);save(next);setNewInn(EMPTY_KOST());setShowAddInn(false);
   };
+  const addBulk = () => {
+    const valid = bulkRows.filter(r=>r.material.trim());
+    if(!valid.length) return;
+    const next = {...data, materialy:[...data.materialy, ...valid.map(r=>({...r,id:Date.now()+Math.random()}))]};
+    setData(next); save(next);
+    setBulkRows(Array(5).fill(null).map(()=>({...EMPTY_MAT(),id:Math.random()})));
+    setShowBulk(false);
+  };
+  const updBulk = (idx,field,val) => setBulkRows(rows=>rows.map((r,i)=>i===idx?{...r,[field]:val}:r));
+  const addBulkRow = () => setBulkRows(rows=>[...rows,{...EMPTY_MAT(),id:Math.random()}]);
   const delMat = id => { const next={...data,materialy:data.materialy.filter(r=>r.id!==id)};setData(next);save(next); };
   const delInn = id => { const next={...data,inne:data.inne.filter(r=>r.id!==id)};setData(next);save(next); };
   const addSup = () => {
@@ -1262,8 +1276,53 @@ function ZakupyPanel() {
                 cursor:"pointer",outline:"none"}}>
               + DODAJ
             </button>
+            <button onClick={()=>tab==="materialy"?setShowBulk(s=>!s):null}
+              style={{padding:"4px 14px",borderRadius:5,background:"white",color:"#6b7280",
+                border:"1px solid #e8e8e3",fontFamily:ff,fontWeight:700,fontSize:10,
+                letterSpacing:"1px",cursor:"pointer",outline:"none",
+                display:tab==="materialy"?"block":"none"}}>
+              + WIELE WIERSZY
+            </button>
           </div>
         </div>
+
+        {/* Bulk add form */}
+        {tab==="materialy"&&showBulk&&(
+          <div style={{background:"white",border:"1px solid #e8e8e3",borderRadius:8,padding:14,marginBottom:12,boxShadow:"0 2px 8px rgba(0,0,0,.08)"}}>
+            <div style={{fontSize:10,fontWeight:700,color:"#9ca3af",letterSpacing:"1px",textTransform:"uppercase",marginBottom:10,fontFamily:ff}}>DODAJ WIELE MATERIAŁÓW</div>
+            <div style={{overflowX:"auto"}}>
+              <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+                <thead>
+                  <tr>
+                    {["DATA","MATERIAŁ","KATEGORIA","DOSTAWCA","ILOŚĆ","JM","CENA JED.","PRZEZNACZENIE"].map(h=>(
+                      <th key={h} style={{padding:"4px 6px",fontSize:8,fontWeight:700,color:"#9ca3af",letterSpacing:".5px",textTransform:"uppercase",fontFamily:ff,textAlign:"left",borderBottom:"1px solid #e8e8e3",whiteSpace:"nowrap"}}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {bulkRows.map((r,i)=>(
+                    <tr key={r.id}>
+                      <td style={{padding:"3px 4px"}}><input type="date" value={r.data||""} onChange={e=>updBulk(i,"data",e.target.value)} style={{width:110,padding:"3px 5px",border:"1px solid #e8e8e3",borderRadius:3,fontSize:10,fontFamily:ff,outline:"none"}}/></td>
+                      <td style={{padding:"3px 4px"}}><input value={r.material||""} onChange={e=>updBulk(i,"material",e.target.value)} placeholder="nazwa" style={{width:120,padding:"3px 5px",border:"1px solid #e8e8e3",borderRadius:3,fontSize:10,fontFamily:ff,outline:"none"}}/></td>
+                      <td style={{padding:"3px 4px"}}><select value={r.kategoria||""} onChange={e=>updBulk(i,"kategoria",e.target.value)} style={{width:130,padding:"3px 5px",border:"1px solid #e8e8e3",borderRadius:3,fontSize:10,fontFamily:ff,outline:"none",background:"white"}}>{KATEGORIE_MAT.map(k=><option key={k}>{k}</option>)}</select></td>
+                      <td style={{padding:"3px 4px"}}><select value={r.dostawca||""} onChange={e=>updBulk(i,"dostawca",e.target.value)} style={{width:110,padding:"3px 5px",border:"1px solid #e8e8e3",borderRadius:3,fontSize:10,fontFamily:ff,outline:"none",background:"white"}}>{supNames.map(n=><option key={n}>{n}</option>)}</select></td>
+                      <td style={{padding:"3px 4px"}}><input type="number" value={r.ilosc||""} onChange={e=>updBulk(i,"ilosc",e.target.value)} style={{width:60,padding:"3px 5px",border:"1px solid #e8e8e3",borderRadius:3,fontSize:10,fontFamily:ff,outline:"none"}}/></td>
+                      <td style={{padding:"3px 4px"}}><select value={r.jednostka||""} onChange={e=>updBulk(i,"jednostka",e.target.value)} style={{width:60,padding:"3px 5px",border:"1px solid #e8e8e3",borderRadius:3,fontSize:10,fontFamily:ff,outline:"none",background:"white"}}>{JEDNOSTKI.map(j=><option key={j}>{j}</option>)}</select></td>
+                      <td style={{padding:"3px 4px"}}><input type="number" value={r.cenajed||""} onChange={e=>updBulk(i,"cenajed",e.target.value)} style={{width:70,padding:"3px 5px",border:"1px solid #e8e8e3",borderRadius:3,fontSize:10,fontFamily:ff,outline:"none"}}/></td>
+                      <td style={{padding:"3px 4px"}}><select value={r.przeznaczenie||""} onChange={e=>updBulk(i,"przeznaczenie",e.target.value)} style={{width:100,padding:"3px 5px",border:"1px solid #e8e8e3",borderRadius:3,fontSize:10,fontFamily:ff,outline:"none",background:"white"}}>{projOptions.map(p=><option key={p.value} value={p.value}>{p.label}</option>)}</select></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div style={{display:"flex",gap:8,marginTop:10,alignItems:"center"}}>
+              <button onClick={addBulk} style={{padding:"6px 18px",background:"#9ec417",color:"#1a1a1a",border:"none",borderRadius:5,fontFamily:ff,fontWeight:700,fontSize:11,cursor:"pointer"}}>ZAPISZ WSZYSTKIE</button>
+              <button onClick={addBulkRow} style={{padding:"6px 14px",background:"white",color:"#6b7280",border:"1px solid #e8e8e3",borderRadius:5,fontFamily:ff,fontWeight:700,fontSize:11,cursor:"pointer"}}>+ DODAJ WIERSZ</button>
+              <button onClick={()=>setShowBulk(false)} style={{padding:"6px 14px",background:"white",color:"#9ca3af",border:"1px solid #e8e8e3",borderRadius:5,fontFamily:ff,fontWeight:700,fontSize:11,cursor:"pointer"}}>ANULUJ</button>
+              <span style={{fontSize:10,color:"#9ca3af",fontFamily:ff,marginLeft:"auto"}}>Wypełnij co najmniej pole MATERIAŁ — reszta opcjonalna</span>
+            </div>
+          </div>
+        )}
 
         {/* Sum bar */}
         <div style={{background:"#eef6d0",border:"1px solid #c8e87a",borderRadius:6,
@@ -2169,11 +2228,18 @@ function HomeScreen({ onSelect }) {
               </div>
             </div>
           </div>
-          {/* ZAKUPY button */}
+        </div>
+
+        {/* ══ SEKCJA: LISTA ZAKUPÓW ══ */}
+        <div style={{marginBottom:36}}>
+          <div style={{marginBottom:14,paddingBottom:10,borderBottom:"2px solid #e8e8e3"}}>
+            <div style={{fontSize:18,fontWeight:900,color:"#1a1a1a",letterSpacing:"-0.3px",fontFamily:ff}}>LISTA ZAKUPÓW</div>
+            <div style={{fontSize:10,color:"#9ca3af",letterSpacing:"1.5px",textTransform:"uppercase",marginTop:2,fontFamily:ff}}>MATERIAŁY · INNE · DOSTAWCY</div>
+          </div>
           <div className="pbtn" onClick={()=>onSelect("ZAKUPY")}
             style={{background:"#fff",border:"1px solid #e8e8e3",borderRadius:8,
               padding:"10px 14px",display:"flex",flexDirection:"column",
-              justifyContent:"space-between",marginTop:10,
+              justifyContent:"space-between",
               boxShadow:"0 1px 3px rgba(0,0,0,.05)",cursor:"pointer",
               minHeight:72,boxSizing:"border-box",overflow:"hidden"}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
@@ -2185,15 +2251,9 @@ function HomeScreen({ onSelect }) {
                 OTWÓRZ →
               </div>
             </div>
-            <div style={{display:"flex",flexDirection:"column",gap:1,marginTop:8}}>
-              <span style={{fontSize:10,fontWeight:700,color:"#1a1a1a",fontFamily:ff,
-                letterSpacing:".3px",textTransform:"uppercase"}}>ZAKUPY</span>
-              <span style={{fontSize:9,color:"#9ca3af",fontFamily:ff}}>
-                Materiały · dodatkowe koszty · dostawcy
-              </span>
-            </div>
           </div>
         </div>
+
         <SectionHead title="PODSUMOWANIE" sub="aktywne projekty"/>
         {loading&&<div style={{textAlign:"center",padding:"10px 0",fontSize:11,color:"#9ca3af",fontFamily:ff,letterSpacing:"1px"}}>⏳ ŁADOWANIE DANYCH...</div>}
         <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:18,flexWrap:"wrap"}}>
@@ -2257,4 +2317,4 @@ export default function App() {
   if (active) return <ErrorBoundary><ProjectSheet projectId={active} onBack={() => setActive(null)}/></ErrorBoundary>;
   return <ErrorBoundary><HomeScreen onSelect={setActive}/></ErrorBoundary>;
 }
-// v3
+// v4
