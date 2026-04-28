@@ -2169,6 +2169,30 @@ function HomeScreen({ onSelect }) {
               </div>
             </div>
           </div>
+          {/* ZAKUPY button */}
+          <div className="pbtn" onClick={()=>onSelect("ZAKUPY")}
+            style={{background:"#fff",border:"1px solid #e8e8e3",borderRadius:8,
+              padding:"10px 14px",display:"flex",flexDirection:"column",
+              justifyContent:"space-between",marginTop:10,
+              boxShadow:"0 1px 3px rgba(0,0,0,.05)",cursor:"pointer",
+              minHeight:72,boxSizing:"border-box",overflow:"hidden"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+              <span className="pid" style={{fontFamily:ff,fontWeight:900,fontSize:20,
+                color:"#1a1a1a",letterSpacing:"-0.5px",flexShrink:0,lineHeight:1}}>ZAKUPY</span>
+              <div style={{background:"#eef6d0",border:"1px solid #c8e87a",borderRadius:5,
+                padding:"3px 10px",fontSize:10,fontWeight:700,color:"#4a7009",
+                fontFamily:ff,letterSpacing:".5px",flexShrink:0,whiteSpace:"nowrap"}}>
+                OTWÓRZ →
+              </div>
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:1,marginTop:8}}>
+              <span style={{fontSize:10,fontWeight:700,color:"#1a1a1a",fontFamily:ff,
+                letterSpacing:".3px",textTransform:"uppercase"}}>ZAKUPY</span>
+              <span style={{fontSize:9,color:"#9ca3af",fontFamily:ff}}>
+                Materiały · dodatkowe koszty · dostawcy
+              </span>
+            </div>
+          </div>
         </div>
         <SectionHead title="PODSUMOWANIE" sub="aktywne projekty"/>
         {loading&&<div style={{textAlign:"center",padding:"10px 0",fontSize:11,color:"#9ca3af",fontFamily:ff,letterSpacing:"1px"}}>⏳ ŁADOWANIE DANYCH...</div>}
@@ -2233,4 +2257,4 @@ export default function App() {
   if (active) return <ErrorBoundary><ProjectSheet projectId={active} onBack={() => setActive(null)}/></ErrorBoundary>;
   return <ErrorBoundary><HomeScreen onSelect={setActive}/></ErrorBoundary>;
 }
-// v2
+// v3
