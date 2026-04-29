@@ -1155,6 +1155,65 @@ function ZakupyPanel() {
   const [bulkRows,    setBulkRows]    = useState(
     Array(5).fill(null).map(()=>({...EMPTY_MAT(),id:Math.random()}))
   );
+  const [scanning,    setScanning]    = useState(false);
+  const receiptRef = useRef(null);
+
+  const handleReceiptScan = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setScanning(true);
+    e.target.value = "";
+    try {
+      const b64 = await new Promise((res,rej)=>{
+        const reader = new FileReader();
+        reader.onload = ()=>res(reader.result.split(",")[1]);
+        reader.onerror = rej;
+        reader.readAsDataURL(file);
+      });
+      const resp = await fetch("https://api.anthropic.com/v1/messages",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          model:"claude-sonnet-4-20250514",
+          max_tokens:1000,
+          messages:[{role:"user",content:[
+            {type:"image",source:{type:"base64",media_type:file.type||"image/jpeg",data:b64}},
+            {type:"text",text:`Przeanalizuj ten paragon/fakturę. Zwróć TYLKO JSON bez żadnych innych znaków, w formacie:
+{"dostawca":"nazwa sklepu","pozycje":[{"material":"nazwa produktu","ilosc":"1","jednostka":"szt.","cenajed":"cena jednostkowa jako liczba","kategoria":"kategoria"}]}
+Kategorie do wyboru: Konstrukcja Stalowa, Drewno Konstrukcyjne, Płyta OSB, Płyta GK, Wkręty Konstrukcyjne, Śruby, Instalacje Elektryczne, Wod-Kan, Wentylacja, Klimatyzacja, Komin, Ocieplenia, Blachodachówka, Inne.
+Data z paragonu: ${new Date().toISOString().split("T")[0]}`}
+          ]}]
+        })
+      });
+      const json = await resp.json();
+      const text = json.content?.map(c=>c.text||"").join("").trim();
+      const parsed = JSON.parse(text.replace(/```json|```/g,"").trim());
+      const today = new Date().toISOString().split("T")[0];
+      const scanned = (parsed.pozycje||[]).map(p=>({
+        ...EMPTY_MAT(),
+        id: Date.now()+Math.random(),
+        data: today,
+        material: p.material||"",
+        ilosc: String(p.ilosc||"1"),
+        jednostka: p.jednostka||"szt.",
+        cenajed: String(p.cenajed||""),
+        kategoria: p.kategoria||"Inne",
+        dostawca: parsed.dostawca||supNames[0]||"Inne",
+        przeznaczenie: projOptions[0]?.value||"A1",
+      }));
+      if(scanned.length>0){
+        const next={...data,materialy:[...data.materialy,...scanned]};
+        setData(next);save(next);
+        alert(`✓ Dodano ${scanned.length} pozycji z paragonu`);
+      } else {
+        alert("Nie udało się odczytać pozycji z paragonu");
+      }
+    } catch(err){
+      alert("Błąd skanowania: "+err.message);
+    } finally {
+      setScanning(false);
+    }
+  };
   const [newMat,  setNewMat]  = useState(EMPTY_MAT);
   const [newInn,  setNewInn]  = useState(EMPTY_KOST);
   const [newSup,  setNewSup]  = useState({nazwa:"",branza:"Ogólnobudowlane"});
@@ -1283,6 +1342,18 @@ function ZakupyPanel() {
                 display:tab==="materialy"?"block":"none"}}>
               + WIELE WIERSZY
             </button>
+            {tab==="materialy"&&(
+              <>
+                <input ref={receiptRef} type="file" accept="image/*" style={{display:"none"}} onChange={handleReceiptScan}/>
+                <button onClick={()=>receiptRef.current?.click()} disabled={scanning}
+                  style={{padding:"4px 14px",borderRadius:5,
+                    background:scanning?"#f0f0ec":"white",color:scanning?"#9ca3af":"#6b7280",
+                    border:"1px solid #e8e8e3",fontFamily:ff,fontWeight:700,fontSize:10,
+                    letterSpacing:"1px",cursor:scanning?"wait":"pointer",outline:"none"}}>
+                  {scanning?"⏳ SKANUJĘ...":"📷 SKAN PARAGONU"}
+                </button>
+              </>
+            )}
           </div>
         </div>
 
@@ -1294,7 +1365,7 @@ function ZakupyPanel() {
               <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
                 <thead>
                   <tr>
-                    {["DATA","MATERIAŁ","KATEGORIA","DOSTAWCA","ILOŚĆ","JM","CENA JED.","PRZEZNACZENIE"].map(h=>(
+                    {["DATA","MATERIAŁ","KATEGORIA","DOSTAWCA","ILOŚĆ","JM","CENA JED.","PROJEKT"].map(h=>(
                       <th key={h} style={{padding:"4px 6px",fontSize:8,fontWeight:700,color:"#9ca3af",letterSpacing:".5px",textTransform:"uppercase",fontFamily:ff,textAlign:"left",borderBottom:"1px solid #e8e8e3",whiteSpace:"nowrap"}}>{h}</th>
                     ))}
                   </tr>
@@ -1394,7 +1465,7 @@ function ZakupyPanel() {
                     <TH c="JM" style={{minWidth:45}}/>
                     <TH c="CENA JED." style={{minWidth:75,textAlign:"right"}}/>
                     <TH c="WARTOŚĆ" style={{minWidth:85,textAlign:"right"}}/>
-                    <TH c="PRZEZNACZENIE" style={{minWidth:110}}/>
+                    <TH c="PROJEKT" style={{minWidth:110}}/>
                     <TH c="" style={{width:24}}/>
                   </tr>
                 </thead>
@@ -1457,7 +1528,7 @@ function ZakupyPanel() {
                     <TH c="OPIS" style={{minWidth:180}}/>
                     <TH c="KWOTA" style={{minWidth:90,textAlign:"right"}}/>
                     <TH c="KOMENTARZ" style={{minWidth:140}}/>
-                    <TH c="PRZEZNACZENIE" style={{minWidth:110}}/>
+                    <TH c="PROJEKT" style={{minWidth:110}}/>
                     <TH c="" style={{width:24}}/>
                   </tr>
                 </thead>
@@ -2040,6 +2111,288 @@ function CRMPanel({ onDataChange }) {
   );
 }
 
+// ─── RAPORTY ─────────────────────────────────────────────────────────────────
+function RaportyScreen({ onBack }) {
+  const [view, setView] = useState(null); // null | 'ogolny' | 'finansowy' | 'klient'
+  const [selProj, setSelProj] = useState("A1");
+  const [generating, setGenerating] = useState(false);
+  const [reportData, setReportData] = useState(null);
+  const today = new Date().toLocaleDateString("pl-PL",{day:"2-digit",month:"2-digit",year:"numeric"});
+
+  // Load all data
+  const snaps = PROJECTS_LIST.map(id => {
+    for (const s of [sessionStorage,localStorage]) {
+      try { const r=s.getItem(`kamp-bud-project-${id}`); if(r) return {id,...JSON.parse(r)}; } catch(e) {}
+    }
+    return {id,info:PROJECT_DEFAULTS[id]||{},plat:[],koszty:{}};
+  });
+
+  const activeSnaps = snaps.filter(s=>(s.info?.etap||PROJECT_DEFAULTS[s.id]?.etap)!=="NIEAKTYWNY");
+
+  const generateReport = async (type) => {
+    setGenerating(true);
+    setReportData(null);
+    try {
+      const projData = type==="klient"
+        ? snaps.filter(s=>s.id===selProj)
+        : activeSnaps;
+
+      const summary = projData.map(s=>{
+        const info = s.info||{};
+        const plat = s.plat||[];
+        const koszty = s.koszty||{};
+        const totalUmowa = plat.filter(p=>p.netto>0).reduce((a,p)=>a+p.netto,0);
+        const zapl = plat.filter(p=>p.zreal==="TAK").reduce((a,p)=>a+p.netto,0);
+        const opozn = plat.filter(p=>p.forma==="OPÓŹNIENIE"&&p.zreal==="NIE");
+        const koszt = Object.values(koszty).reduce((a,v)=>a+(+v||0),0);
+        return {
+          id:s.id, etap:info.etap||"—", klient:info.klient||"—",
+          data:info.data||"—", kod:info.kod||s.id,
+          totalUmowa, zapl, doZapl:totalUmowa-zapl, opozn:opozn.length,
+          koszt, zysk:totalUmowa-koszt, koszty
+        };
+      });
+
+      let prompt = "";
+      if(type==="ogolny") {
+        prompt = `Jesteś asystentem budowlanym. Wygeneruj szczegółowy RAPORT OGÓLNY w języku polskim na podstawie danych projektów firmy KAMP-BUD.
+Data raportu: ${today}
+
+Dane projektów:
+${JSON.stringify(summary,null,2)}
+
+Raport powinien zawierać:
+1. PODSUMOWANIE WYKONAWCZE - krótki przegląd wszystkich projektów
+2. STATUS KAŻDEGO PROJEKTU - etap, klient, daty, uwagi
+3. POSTĘP PŁATNOŚCI - zestawienie opłacenia każdego projektu
+4. OPÓŹNIENIA I RYZYKA - lista problemów wymagających uwagi
+5. REKOMENDACJE - co wymaga pilnego działania
+
+Formatuj w czytelny sposób z nagłówkami. Używaj polskich znaków.`;
+      } else if(type==="finansowy") {
+        prompt = `Jesteś analitykiem finansowym. Wygeneruj RAPORT FINANSOWY w języku polskim dla firmy KAMP-BUD.
+Data raportu: ${today}
+
+Dane finansowe projektów:
+${JSON.stringify(summary,null,2)}
+
+Raport powinien zawierać:
+1. PRZYCHODY - łączna wartość umów netto i brutto
+2. STAN PŁATNOŚCI - co wpłynęło, co pozostało do zapłaty
+3. KOSZTY WG KATEGORII - zestawienie kosztów dla każdego projektu
+4. RENTOWNOŚĆ - zysk/strata każdego projektu i łącznie
+5. OPÓŹNIONE PŁATNOŚCI - lista z kwotami
+6. PROGNOZA - kiedy spodziewać się wpłat
+
+Formatuj jako profesjonalny raport finansowy z tabelami tekstowymi.`;
+      } else {
+        const proj = summary[0]||{};
+        prompt = `Wygeneruj PODSUMOWANIE DLA KLIENTA projektu ${proj.kod} w języku polskim.
+Data: ${today}
+Klient: ${proj.klient}
+
+Dane projektu (TYLKO informacje dla klienta - BEZ kosztów, marży, zysku):
+- Etap: ${proj.etap}
+- Data podpisania: ${proj.data}
+- Wartość kontraktu netto: ${proj.totalUmowa?.toLocaleString("pl-PL")} zł
+- Wartość brutto (8% VAT): ${(proj.totalUmowa*1.08)?.toLocaleString("pl-PL")} zł
+- Zapłacono: ${proj.zapl?.toLocaleString("pl-PL")} zł
+- Pozostało do zapłaty: ${proj.doZapl?.toLocaleString("pl-PL")} zł
+- Zaległe płatności: ${proj.opozn}
+
+Podsumowanie powinno być: profesjonalne, przyjazne, bez danych wewnętrznych firmy.
+Zawrzyj: powitanie, aktualny etap prac, stan płatności, następne kroki.`;
+      }
+
+      const resp = await fetch("https://api.anthropic.com/v1/messages",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          model:"claude-sonnet-4-20250514",
+          max_tokens:2000,
+          messages:[{role:"user",content:prompt}]
+        })
+      });
+      const json = await resp.json();
+      const text = json.content?.map(c=>c.text||"").join("") || "Błąd generowania raportu";
+      setReportData({text, type, date:today});
+    } catch(err) {
+      setReportData({text:"Błąd: "+err.message, type, date:today});
+    }
+    setGenerating(false);
+  };
+
+  const exportToPDF = () => {
+    if(!reportData) return;
+    const w = window.open("","_blank");
+    w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+      <title>Raport KAMP-BUD ${reportData.date}</title>
+      <style>
+        body{font-family:Arial,sans-serif;margin:40px;line-height:1.6;color:#1a1a1a;}
+        h1{color:#1a1a1a;border-bottom:3px solid #9ec417;padding-bottom:8px;}
+        h2{color:#4a7009;margin-top:24px;}
+        pre{white-space:pre-wrap;font-family:inherit;}
+        .header{display:flex;justify-content:space-between;margin-bottom:20px;}
+        .date{color:#6b7280;font-size:13px;}
+        @media print{body{margin:20px;}button{display:none;}}
+      </style></head><body>
+      <div class="header">
+        <h1>KAMP-BUD — ${reportData.type==="ogolny"?"RAPORT OGÓLNY":reportData.type==="finansowy"?"RAPORT FINANSOWY":"PODSUMOWANIE DLA KLIENTA"}</h1>
+        <span class="date">Data: ${reportData.date}</span>
+      </div>
+      <pre>${reportData.text.replace(/</g,"&lt;").replace(/>/g,"&gt;")}</pre>
+      <script>window.onload=()=>{window.print();}<\/script>
+      </body></html>`);
+    w.document.close();
+  };
+
+  const exportToExcel = () => {
+    if(!reportData) return;
+    const lines = reportData.text.split('\n');
+    const rows = lines.map(l=>`"${l.replace(/"/g,'""')}"`).join('\n');
+    const csv = `"KAMP-BUD - ${reportData.type==="ogolny"?"RAPORT OGÓLNY":reportData.type==="finansowy"?"RAPORT FINANSOWY":"PODSUMOWANIE DLA KLIENTA"}"\n"Data: ${reportData.date}"\n\n${rows}`;
+    const blob = new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href=url; a.download=`raport_kamp_bud_${reportData.date.replace(/\./g,"-")}.csv`;
+    a.click(); URL.revokeObjectURL(url);
+  };
+
+  const buttons = [
+    {key:"ogolny",    label:"RAPORT OGÓLNY",          sub:"Stan wszystkich projektów i prac", icon:"📋"},
+    {key:"finansowy", label:"RAPORT FINANSOWY",        sub:"Finanse, koszty, rentowność",      icon:"💰"},
+    {key:"klient",    label:"PODSUMOWANIE DLA KLIENTA",sub:"Dane tylko dla klienta",           icon:"👤"},
+  ];
+
+  return (
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&display=swap');
+        *{box-sizing:border-box;margin:0;padding:0;}
+        body{background:#f4f4f0;font-family:'Barlow Condensed',sans-serif;}
+      `}</style>
+      <nav style={{background:"#1a1a1a",padding:"0 24px",display:"flex",alignItems:"center",
+        height:54,boxShadow:"0 2px 6px rgba(0,0,0,.25)"}}>
+        <Logo/>
+        <div style={{color:"rgba(255,255,255,.18)",fontSize:20,margin:"0 16px"}}>|</div>
+        <div style={{color:"rgba(255,255,255,.5)",fontSize:12,fontWeight:600,letterSpacing:"2px",
+          textTransform:"uppercase",fontFamily:ff}}>System Projektowy</div>
+        <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:12}}>
+          <span style={{color:"rgba(255,255,255,.28)",fontSize:11,letterSpacing:"1px",fontFamily:ff}}>RAPORTY</span>
+          <button onClick={onBack} style={{background:"transparent",border:"1px solid rgba(255,255,255,.3)",
+            color:"rgba(255,255,255,.7)",padding:"5px 14px",borderRadius:4,cursor:"pointer",
+            fontFamily:ff,fontWeight:700,fontSize:12,letterSpacing:"1px",textTransform:"uppercase",outline:"none"}}
+            onMouseOver={e=>{e.target.style.background="rgba(255,255,255,.1)";}}
+            onMouseOut={e=>{e.target.style.background="transparent";}}>
+            ← WSZYSTKIE PROJEKTY
+          </button>
+        </div>
+      </nav>
+
+      <div style={{maxWidth:1100,margin:"0 auto",padding:"28px 28px 56px"}}>
+        <div style={{marginBottom:24,paddingBottom:12,borderBottom:"2px solid #e8e8e3"}}>
+          <div style={{fontSize:22,fontWeight:900,color:"#1a1a1a",letterSpacing:"-0.3px",fontFamily:ff}}>RAPORTY</div>
+          <div style={{fontSize:10,color:"#9ca3af",letterSpacing:"1.5px",textTransform:"uppercase",marginTop:2,fontFamily:ff}}>
+            WYBIERZ RODZAJ RAPORTU · DATA: {today}
+          </div>
+        </div>
+
+        {/* Report type selector */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:14,marginBottom:24}}>
+          {buttons.map(b=>(
+            <div key={b.key}
+              onClick={()=>{ setView(b.key); setReportData(null); }}
+              style={{background: view===b.key?"#1a1a1a":"#fff",
+                border:`2px solid ${view===b.key?"#9ec417":"#e8e8e3"}`,
+                borderRadius:10,padding:"18px 20px",cursor:"pointer",
+                boxShadow:"0 1px 4px rgba(0,0,0,.07)",transition:"all .15s"}}>
+              <div style={{fontSize:28,marginBottom:8}}>{b.icon}</div>
+              <div style={{fontSize:14,fontWeight:900,color:view===b.key?"#9ec417":"#1a1a1a",
+                fontFamily:ff,letterSpacing:"-0.2px",marginBottom:4}}>{b.label}</div>
+              <div style={{fontSize:10,color:view===b.key?"rgba(255,255,255,.5)":"#9ca3af",fontFamily:ff}}>{b.sub}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Project selector for client report */}
+        {view==="klient"&&(
+          <div style={{marginBottom:16,display:"flex",alignItems:"center",gap:12}}>
+            <span style={{fontSize:11,fontWeight:700,color:"#6b7280",fontFamily:ff,letterSpacing:"1px",textTransform:"uppercase"}}>WYBIERZ PROJEKT:</span>
+            <select value={selProj} onChange={e=>setSelProj(e.target.value)}
+              style={{padding:"6px 12px",borderRadius:5,border:"1px solid #e8e8e3",
+                fontSize:12,fontFamily:ff,fontWeight:700,cursor:"pointer",outline:"none",background:"white"}}>
+              {PROJECTS_LIST.map(id=>{
+                const def=PROJECT_DEFAULTS[id]||{};
+                const suffix=(def.kod||id).startsWith(id)?(def.kod||id).slice(id.length).replace(/^\s*-\s*/,""):"";
+                return <option key={id} value={id}>{suffix?`${id} - ${suffix.toUpperCase()}`:id}</option>;
+              })}
+            </select>
+          </div>
+        )}
+
+        {/* Generate button */}
+        {view&&(
+          <div style={{marginBottom:20}}>
+            <button onClick={()=>generateReport(view)} disabled={generating}
+              style={{padding:"10px 28px",background:generating?"#9ca3af":"#9ec417",color:"#1a1a1a",
+                border:"none",borderRadius:7,fontFamily:ff,fontWeight:900,fontSize:13,
+                letterSpacing:"1px",textTransform:"uppercase",cursor:generating?"wait":"pointer",
+                boxShadow:"0 2px 8px rgba(0,0,0,.15)",transition:"background .15s"}}>
+              {generating?"⏳ GENERUJĘ RAPORT...":"📄 GENERUJ RAPORT"}
+            </button>
+          </div>
+        )}
+
+        {/* Report output */}
+        {reportData&&(
+          <div style={{background:"white",border:"1px solid #e8e8e3",borderRadius:10,overflow:"hidden",
+            boxShadow:"0 2px 8px rgba(0,0,0,.08)"}}>
+            {/* Header */}
+            <div style={{background:"#1a1a1a",padding:"12px 20px",display:"flex",
+              alignItems:"center",justifyContent:"space-between"}}>
+              <div>
+                <div style={{fontSize:13,fontWeight:900,color:"#9ec417",fontFamily:ff,letterSpacing:"1px",textTransform:"uppercase"}}>
+                  {reportData.type==="ogolny"?"RAPORT OGÓLNY":reportData.type==="finansowy"?"RAPORT FINANSOWY":"PODSUMOWANIE DLA KLIENTA"}
+                </div>
+                <div style={{fontSize:10,color:"rgba(255,255,255,.4)",fontFamily:ff,marginTop:2}}>
+                  KAMP-BUD · Data wygenerowania: {reportData.date}
+                </div>
+              </div>
+              <div style={{display:"flex",gap:8}}>
+                <button onClick={exportToPDF}
+                  style={{padding:"6px 16px",background:"#9ec417",color:"#1a1a1a",border:"none",
+                    borderRadius:5,fontFamily:ff,fontWeight:700,fontSize:10,cursor:"pointer",
+                    letterSpacing:"1px"}}>
+                  📄 EKSPORT PDF
+                </button>
+                <button onClick={exportToExcel}
+                  style={{padding:"6px 16px",background:"white",color:"#1a1a1a",border:"none",
+                    borderRadius:5,fontFamily:ff,fontWeight:700,fontSize:10,cursor:"pointer",
+                    letterSpacing:"1px"}}>
+                  📊 EKSPORT CSV/EXCEL
+                </button>
+              </div>
+            </div>
+            {/* Content */}
+            <div style={{padding:"24px",maxHeight:600,overflowY:"auto"}}>
+              <pre style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:13,lineHeight:1.7,
+                color:"#1a1a1a",whiteSpace:"pre-wrap",wordBreak:"break-word"}}>
+                {reportData.text}
+              </pre>
+            </div>
+          </div>
+        )}
+
+        {!view&&(
+          <div style={{textAlign:"center",padding:"60px 0",color:"#9ca3af",fontFamily:ff,fontSize:13,letterSpacing:"1px"}}>
+            WYBIERZ RODZAJ RAPORTU POWYŻEJ
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
 // ─── HOME SCREEN ──────────────────────────────────────────────────────────────
 function HomeScreen({ onSelect }) {
   const ETAP_DL = {
@@ -2230,10 +2583,12 @@ function HomeScreen({ onSelect }) {
           </div>
         </div>
 
-        {/* ══ SEKCJA: LISTA ZAKUPÓW ══ */}
-        <div style={{marginBottom:36}}>
+        {/* ══ SEKCJA: ZAKUPY + RAPORTY (2-col) ══ */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20,marginBottom:36}}>
+        {/* ZAKUPY col */}
+        <div>
           <div style={{marginBottom:14,paddingBottom:10,borderBottom:"2px solid #e8e8e3"}}>
-            <div style={{fontSize:18,fontWeight:900,color:"#1a1a1a",letterSpacing:"-0.3px",fontFamily:ff}}>LISTA ZAKUPÓW</div>
+            <div style={{fontSize:18,fontWeight:900,color:"#1a1a1a",letterSpacing:"-0.3px",fontFamily:ff}}>ZAKUPY</div>
             <div style={{fontSize:10,color:"#9ca3af",letterSpacing:"1.5px",textTransform:"uppercase",marginTop:2,fontFamily:ff}}>MATERIAŁY · INNE · DOSTAWCY</div>
           </div>
           <div className="pbtn" onClick={()=>onSelect("ZAKUPY")}
@@ -2244,7 +2599,7 @@ function HomeScreen({ onSelect }) {
               minHeight:72,boxSizing:"border-box",overflow:"hidden"}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
               <span className="pid" style={{fontFamily:ff,fontWeight:900,fontSize:20,
-                color:"#1a1a1a",letterSpacing:"-0.5px",flexShrink:0,lineHeight:1}}>ZAKUPY</span>
+                color:"#1a1a1a",letterSpacing:"-0.5px",flexShrink:0,lineHeight:1}}>LISTA ZAKUPÓW</span>
               <div style={{background:"#eef6d0",border:"1px solid #c8e87a",borderRadius:5,
                 padding:"3px 10px",fontSize:10,fontWeight:700,color:"#4a7009",
                 fontFamily:ff,letterSpacing:".5px",flexShrink:0,whiteSpace:"nowrap"}}>
@@ -2253,6 +2608,30 @@ function HomeScreen({ onSelect }) {
             </div>
           </div>
         </div>
+        {/* RAPORTY col */}
+        <div>
+          <div style={{marginBottom:14,paddingBottom:10,borderBottom:"2px solid #e8e8e3"}}>
+            <div style={{fontSize:18,fontWeight:900,color:"#1a1a1a",letterSpacing:"-0.3px",fontFamily:ff}}>RAPORTY</div>
+            <div style={{fontSize:10,color:"#9ca3af",letterSpacing:"1.5px",textTransform:"uppercase",marginTop:2,fontFamily:ff}}>OGÓLNY · FINANSOWY · DLA KLIENTA</div>
+          </div>
+          <div className="pbtn" onClick={()=>onSelect("RAPORTY")}
+            style={{background:"#fff",border:"1px solid #e8e8e3",borderRadius:8,
+              padding:"10px 14px",display:"flex",flexDirection:"column",
+              justifyContent:"space-between",
+              boxShadow:"0 1px 3px rgba(0,0,0,.05)",cursor:"pointer",
+              minHeight:72,boxSizing:"border-box",overflow:"hidden"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+              <span className="pid" style={{fontFamily:ff,fontWeight:900,fontSize:20,
+                color:"#1a1a1a",letterSpacing:"-0.5px",flexShrink:0,lineHeight:1}}>GENERUJ RAPORT</span>
+              <div style={{background:"#eef6d0",border:"1px solid #c8e87a",borderRadius:5,
+                padding:"3px 10px",fontSize:10,fontWeight:700,color:"#4a7009",
+                fontFamily:ff,letterSpacing:".5px",flexShrink:0,whiteSpace:"nowrap"}}>
+                OTWÓRZ →
+              </div>
+            </div>
+          </div>
+        </div>
+        </div>{/* end 2-col grid */}
 
         <SectionHead title="PODSUMOWANIE" sub="aktywne projekty"/>
         {loading&&<div style={{textAlign:"center",padding:"10px 0",fontSize:11,color:"#9ca3af",fontFamily:ff,letterSpacing:"1px"}}>⏳ ŁADOWANIE DANYCH...</div>}
@@ -2312,9 +2691,10 @@ function HomeScreen({ onSelect }) {
 
 export default function App() {
   const [active, setActive] = useState(null);
-  if (active === "CRM")    return <ErrorBoundary><CRMScreen    onBack={() => setActive(null)}/></ErrorBoundary>;
-  if (active === "ZAKUPY") return <ErrorBoundary><ZakupyScreen onBack={() => setActive(null)}/></ErrorBoundary>;
+  if (active === "CRM")     return <ErrorBoundary><CRMScreen     onBack={() => setActive(null)}/></ErrorBoundary>;
+  if (active === "ZAKUPY")  return <ErrorBoundary><ZakupyScreen  onBack={() => setActive(null)}/></ErrorBoundary>;
+  if (active === "RAPORTY") return <ErrorBoundary><RaportyScreen onBack={() => setActive(null)}/></ErrorBoundary>;
   if (active) return <ErrorBoundary><ProjectSheet projectId={active} onBack={() => setActive(null)}/></ErrorBoundary>;
   return <ErrorBoundary><HomeScreen onSelect={setActive}/></ErrorBoundary>;
 }
-// v4
+// v6
