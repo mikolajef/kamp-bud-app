@@ -2998,13 +2998,14 @@ function HomeScreen({ onSelect }) {
           };
           const ETAP_SHORT = ["Oferta zaakceptowana","Projektowanie i pozwolenia","Realizacja","Odbiór","Zrealizowano"];
 
-          const tProjects = activeSnaps.map(s=>{
-            const info  = s.info || PROJECT_DEFAULTS[s.id] || {};
-            const etap  = info.etap || "Oferta zaakceptowana";
-            const start = info.data || "";
-            const kodFull = info.kod || s.id;
-            return { id:s.id, kodFull, klient:info.klient||"—", etap, start };
-          }).filter(p => p.etap !== "NIEAKTYWNY");
+          const tProjects = projects.filter(p =>
+            p.etap !== "NIEAKTYWNY"
+          ).map(p => ({
+            id: p.id,
+            klient: p.klient,
+            etap: p.etap,
+            start: p.data,
+          }));
 
           if(!tProjects.length) return null;
 
@@ -3466,4 +3467,4 @@ const PROJECT_DEFAULTS = {
 };
 
 // ─── main sheet component ─────────────────────────────────────────────────────
-// build: 20260429203955
+// build: 20260429204906
