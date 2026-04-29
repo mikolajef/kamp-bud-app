@@ -350,6 +350,27 @@ function ProjectSheet({ projectId, onBack }) {
   })));
   const updDet = (i,f,v) => setDetale(p=>p.map((r,j)=>j===i?{...r,[f]:f==="cena"||f==="qty"?Number(v)||0:v}:r));
 
+  // Load zakupy sums for this project from storage
+  const getZakupySums = () => {
+    for (const s of [sessionStorage, localStorage]) {
+      try {
+        const raw = s.getItem(ZAKUPY_KEY);
+        if (!raw) continue;
+        const zdata = JSON.parse(raw);
+        const matSum = (zdata.materialy||[])
+          .filter(r => r.przeznaczenie === projectId)
+          .reduce((a,r) => a + (+r.ilosc||0)*(+r.cenajed||0), 0);
+        const innSum = (zdata.inne||[])
+          .filter(r => r.przeznaczenie === projectId)
+          .reduce((a,r) => a + (+r.kwota||0), 0);
+        return { materialy: Math.round(matSum), inne: Math.round(innSum) };
+      } catch(e) {}
+    }
+    return { materialy: 0, inne: 0 };
+  };
+  const [zakupySums, setZakupySums] = useState(getZakupySums);
+  useEffect(() => { setZakupySums(getZakupySums()); }, [projectId]);
+
   // Keep ref always up to date — all useState above must be declared first
   useEffect(() => { stateRef.current.info   = info;   }, [info]);
   useEffect(() => { stateRef.current.oferta = oferta; }, [oferta]);
@@ -391,7 +412,7 @@ function ProjectSheet({ projectId, onBack }) {
   const kwota = ofN+trN;
   const kwotaB = kwota*1.08;
   const rob = koszty.architekt+koszty.elektryk+koszty.spawacz+koszty.fund+koszty.pracownicy;
-  const kosN = rob+koszty.materialy+koszty.dodatkowe+koszty.paliwo;
+  const kosN = rob + zakupySums.materialy + zakupySums.inne + koszty.paliwo;
   const zysk = kwota-kosN;
 
   const zapl_G = plat.filter(p=>p.forma==="GOTÓWKA"  &&p.zreal==="TAK").reduce((s,p)=>s+p.netto,0);
@@ -714,17 +735,36 @@ function ProjectSheet({ projectId, onBack }) {
               <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                 <thead><tr><TH c="KATEGORIA" style={{textAlign:"left"}}/><TH c="NETTO"/><TH c="VAT 23%"/><TH c="BRUTTO"/></tr></thead>
                 <tbody>
-                  {[["MATERIAŁY","materialy",true],["DODATKOWE KOSZTY","dodatkowe",true],["PALIWO","paliwo",false]].map(([lbl,k,ext])=>(
-                    <tr key={k}>
-                      <td style={{padding:"3px 5px",fontWeight:600,fontSize:11,color:C.textMuted,textTransform:"uppercase"}}>{lbl}{ext&&<span style={{fontSize:9,color:C.textMuted,fontWeight:400}}> (Z INNEJ ZAKŁADKI)</span>}</td>
-                      <td style={{padding:"3px 4px"}}><input type="number" value={koszty[k]||""} onChange={e=>setK(k,e.target.value)} style={{width:"100%",padding:"3px 6px",border:`1px solid ${C.border}`,borderRadius:3,fontSize:11,textAlign:"right"}}/></td>
-                      <td style={{padding:"3px 4px"}}><RO v={zł(Math.round(koszty[k]*.23))} small/></td>
-                      <td style={{padding:"3px 4px"}}><RO v={zł(Math.round(koszty[k]*1.23))} small/></td>
-                    </tr>
-                  ))}
+                  {/* MATERIAŁY — sourced from ZAKUPY panel */}
+                  <tr>
+                    <td style={{padding:"3px 5px",fontWeight:600,fontSize:11,color:C.textMuted,textTransform:"uppercase"}}>
+                      MATERIAŁY
+                      <span style={{fontSize:9,color:C.textMuted,fontWeight:400,marginLeft:4}}>↗ z zakupów</span>
+                    </td>
+                    <td style={{padding:"3px 4px"}}><RO v={zł(Math.round(zakupySums.materialy))} small/></td>
+                    <td style={{padding:"3px 4px"}}><RO v={zł(Math.round(zakupySums.materialy*.23))} small/></td>
+                    <td style={{padding:"3px 4px"}}><RO v={zł(Math.round(zakupySums.materialy*1.23))} small/></td>
+                  </tr>
+                  {/* INNE — sourced from ZAKUPY panel */}
+                  <tr>
+                    <td style={{padding:"3px 5px",fontWeight:600,fontSize:11,color:C.textMuted,textTransform:"uppercase"}}>
+                      INNE
+                      <span style={{fontSize:9,color:C.textMuted,fontWeight:400,marginLeft:4}}>↗ z zakupów</span>
+                    </td>
+                    <td style={{padding:"3px 4px"}}><RO v={zł(Math.round(zakupySums.inne))} small/></td>
+                    <td style={{padding:"3px 4px"}}><RO v={zł(Math.round(zakupySums.inne*.23))} small/></td>
+                    <td style={{padding:"3px 4px"}}><RO v={zł(Math.round(zakupySums.inne*1.23))} small/></td>
+                  </tr>
+                  {/* PALIWO — manual entry */}
+                  <tr>
+                    <td style={{padding:"3px 5px",fontWeight:600,fontSize:11,color:C.textMuted,textTransform:"uppercase"}}>PALIWO</td>
+                    <td style={{padding:"3px 4px"}}><input type="number" value={koszty.paliwo||""} onChange={e=>setK("paliwo",e.target.value)} style={{width:"100%",padding:"3px 6px",border:`1px solid ${C.border}`,borderRadius:3,fontSize:11,textAlign:"right"}}/></td>
+                    <td style={{padding:"3px 4px"}}><RO v={zł(Math.round((+koszty.paliwo||0)*.23))} small/></td>
+                    <td style={{padding:"3px 4px"}}><RO v={zł(Math.round((+koszty.paliwo||0)*1.23))} small/></td>
+                  </tr>
                 </tbody>
               </table>
-              <SumBar netto={koszty.materialy+koszty.dodatkowe+koszty.paliwo}/>
+              <SumBar netto={zakupySums.materialy+zakupySums.inne+koszty.paliwo}/>
             </div>
           </div>
         </Panel>
@@ -2113,155 +2153,438 @@ function CRMPanel({ onDataChange }) {
 
 // ─── RAPORTY ─────────────────────────────────────────────────────────────────
 function RaportyScreen({ onBack }) {
-  const [view, setView] = useState(null); // null | 'ogolny' | 'finansowy' | 'klient'
-  const [selProj, setSelProj] = useState("A1");
-  const [generating, setGenerating] = useState(false);
-  const [reportData, setReportData] = useState(null);
+  const [view,     setView]     = useState(null);
+  const [selProj,  setSelProj]  = useState("A1");
+  const [report,   setReport]   = useState(null);
   const today = new Date().toLocaleDateString("pl-PL",{day:"2-digit",month:"2-digit",year:"numeric"});
+  const todayISO = new Date().toISOString().split("T")[0];
 
-  // Load all data
+  // ── load all snapshots from storage ──────────────────────────────────────
   const snaps = PROJECTS_LIST.map(id => {
-    for (const s of [sessionStorage,localStorage]) {
+    for (const s of [sessionStorage, localStorage]) {
       try { const r=s.getItem(`kamp-bud-project-${id}`); if(r) return {id,...JSON.parse(r)}; } catch(e) {}
     }
-    return {id,info:PROJECT_DEFAULTS[id]||{},plat:[],koszty:{}};
+    return {id, info:PROJECT_DEFAULTS[id]||{}, plat:[], koszty:{}};
   });
+  const activeSnaps = snaps.filter(s => (s.info?.etap||PROJECT_DEFAULTS[s.id]?.etap) !== "NIEAKTYWNY");
 
-  const activeSnaps = snaps.filter(s=>(s.info?.etap||PROJECT_DEFAULTS[s.id]?.etap)!=="NIEAKTYWNY");
+  // ── helpers ───────────────────────────────────────────────────────────────
+  const złR = v => Math.round(+v||0).toLocaleString("pl-PL") + " zł";
+  const pct  = (a,b) => b>0 ? Math.round(a/b*100) : 0;
+  const fmtDate = s => { if(!s) return "—"; const [y,m,d]=s.split("-"); return `${d}.${m}.${y}`; };
 
-  const generateReport = async (type) => {
-    setGenerating(true);
-    setReportData(null);
-    try {
-      const projData = type==="klient"
-        ? snaps.filter(s=>s.id===selProj)
-        : activeSnaps;
-
-      const summary = projData.map(s=>{
-        const info = s.info||{};
-        const plat = s.plat||[];
-        const koszty = s.koszty||{};
-        const totalUmowa = plat.filter(p=>p.netto>0).reduce((a,p)=>a+p.netto,0);
-        const zapl = plat.filter(p=>p.zreal==="TAK").reduce((a,p)=>a+p.netto,0);
-        const opozn = plat.filter(p=>p.forma==="OPÓŹNIENIE"&&p.zreal==="NIE");
-        const koszt = Object.values(koszty).reduce((a,v)=>a+(+v||0),0);
-        return {
-          id:s.id, etap:info.etap||"—", klient:info.klient||"—",
-          data:info.data||"—", kod:info.kod||s.id,
-          totalUmowa, zapl, doZapl:totalUmowa-zapl, opozn:opozn.length,
-          koszt, zysk:totalUmowa-koszt, koszty
-        };
-      });
-
-      let prompt = "";
-      if(type==="ogolny") {
-        prompt = `Jesteś asystentem budowlanym. Wygeneruj szczegółowy RAPORT OGÓLNY w języku polskim na podstawie danych projektów firmy KAMP-BUD.
-Data raportu: ${today}
-
-Dane projektów:
-${JSON.stringify(summary,null,2)}
-
-Raport powinien zawierać:
-1. PODSUMOWANIE WYKONAWCZE - krótki przegląd wszystkich projektów
-2. STATUS KAŻDEGO PROJEKTU - etap, klient, daty, uwagi
-3. POSTĘP PŁATNOŚCI - zestawienie opłacenia każdego projektu
-4. OPÓŹNIENIA I RYZYKA - lista problemów wymagających uwagi
-5. REKOMENDACJE - co wymaga pilnego działania
-
-Formatuj w czytelny sposób z nagłówkami. Używaj polskich znaków.`;
-      } else if(type==="finansowy") {
-        prompt = `Jesteś analitykiem finansowym. Wygeneruj RAPORT FINANSOWY w języku polskim dla firmy KAMP-BUD.
-Data raportu: ${today}
-
-Dane finansowe projektów:
-${JSON.stringify(summary,null,2)}
-
-Raport powinien zawierać:
-1. PRZYCHODY - łączna wartość umów netto i brutto
-2. STAN PŁATNOŚCI - co wpłynęło, co pozostało do zapłaty
-3. KOSZTY WG KATEGORII - zestawienie kosztów dla każdego projektu
-4. RENTOWNOŚĆ - zysk/strata każdego projektu i łącznie
-5. OPÓŹNIONE PŁATNOŚCI - lista z kwotami
-6. PROGNOZA - kiedy spodziewać się wpłat
-
-Formatuj jako profesjonalny raport finansowy z tabelami tekstowymi.`;
-      } else {
-        const proj = summary[0]||{};
-        prompt = `Wygeneruj PODSUMOWANIE DLA KLIENTA projektu ${proj.kod} w języku polskim.
-Data: ${today}
-Klient: ${proj.klient}
-
-Dane projektu (TYLKO informacje dla klienta - BEZ kosztów, marży, zysku):
-- Etap: ${proj.etap}
-- Data podpisania: ${proj.data}
-- Wartość kontraktu netto: ${proj.totalUmowa?.toLocaleString("pl-PL")} zł
-- Wartość brutto (8% VAT): ${(proj.totalUmowa*1.08)?.toLocaleString("pl-PL")} zł
-- Zapłacono: ${proj.zapl?.toLocaleString("pl-PL")} zł
-- Pozostało do zapłaty: ${proj.doZapl?.toLocaleString("pl-PL")} zł
-- Zaległe płatności: ${proj.opozn}
-
-Podsumowanie powinno być: profesjonalne, przyjazne, bez danych wewnętrznych firmy.
-Zawrzyj: powitanie, aktualny etap prac, stan płatności, następne kroki.`;
-      }
-
-      const resp = await fetch("https://api.anthropic.com/v1/messages",{
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({
-          model:"claude-sonnet-4-20250514",
-          max_tokens:2000,
-          messages:[{role:"user",content:prompt}]
-        })
-      });
-      const json = await resp.json();
-      const text = json.content?.map(c=>c.text||"").join("") || "Błąd generowania raportu";
-      setReportData({text, type, date:today});
-    } catch(err) {
-      setReportData({text:"Błąd: "+err.message, type, date:today});
-    }
-    setGenerating(false);
+  const getProjectData = (s) => {
+    const info  = s.info || PROJECT_DEFAULTS[s.id] || {};
+    const plat  = (s.plat||[]).filter(p=>+p.netto>0);
+    const k     = s.koszty || {};
+    const umowa = plat.reduce((a,p)=>a+(+p.netto),0);
+    const zapl  = plat.filter(p=>p.zreal==="TAK").reduce((a,p)=>a+(+p.netto),0);
+    const opozn = plat.filter(p=>p.forma==="OPÓŹNIENIE"&&p.zreal==="NIE");
+    const nadch = plat.filter(p=>p.zreal==="NIE"&&p.data&&p.data>=todayISO&&p.forma!=="OPÓŹNIENIE")
+                      .sort((a,b)=>a.data.localeCompare(b.data));
+    const koszt = Object.values(k).reduce((a,v)=>a+(+v||0),0);
+    const kodFull = (info.kod||s.id).startsWith(s.id)
+      ? (info.kod||s.id)
+      : s.id;
+    return { id:s.id, kodFull, klient:info.klient||"—", etap:info.etap||"—",
+             data:info.data||"", umowa, zapl, doZapl:umowa-zapl,
+             opozn, nadch, koszt, zysk:umowa-koszt, koszty:k, plat };
   };
 
-  const exportToPDF = () => {
-    if(!reportData) return;
+  // ── generate report ───────────────────────────────────────────────────────
+  const generate = (type) => {
+    const projList = type==="klient"
+      ? snaps.filter(s=>s.id===selProj).map(getProjectData)
+      : activeSnaps.map(getProjectData);
+    setReport({ type, date:today, data:projList });
+  };
+
+  // ── SVG bar chart ─────────────────────────────────────────────────────────
+  const BarSVG = ({items, colorFn, W=500, H=140}) => {
+    const max = Math.max(...items.map(i=>i.val), 1);
+    const bw  = Math.floor((W-40) / items.length) - 6;
+    return (
+      <svg width="100%" viewBox={`0 0 ${W} ${H+40}`} style={{display:"block"}}>
+        {items.map((it,i) => {
+          const bh = Math.max(it.val>0?3:0, Math.round((it.val/max)*(H-20)));
+          const x  = 20 + i*(bw+6);
+          const y  = H - bh;
+          return (
+            <g key={i}>
+              <rect x={x} y={20} width={bw} height={H-20} rx={3} fill="#f0f0ec"/>
+              {bh>0 && <rect x={x} y={y} width={bw} height={bh} rx={3} fill={colorFn(it)} opacity=".82"/>}
+              {it.val>0 && <text x={x+bw/2} y={y-4} textAnchor="middle" fontSize={8} fontFamily={ff} fill="#6b7280" fontWeight="700">{Math.round(it.val/1000)}k</text>}
+              <text x={x+bw/2} y={H+14} textAnchor="middle" fontSize={9} fontFamily={ff} fill="#9ca3af" fontWeight="600"
+                transform={items.length>4?`rotate(-35,${x+bw/2},${H+14})`:""}>{it.label}</text>
+            </g>
+          );
+        })}
+        <line x1={20} y1={H} x2={W-20} y2={H} stroke="#e8e8e3" strokeWidth={1}/>
+      </svg>
+    );
+  };
+
+  // ── RAPORT OGÓLNY ─────────────────────────────────────────────────────────
+  const ReportOgolny = ({data}) => {
+    const totalUmowa = data.reduce((s,p)=>s+p.umowa,0);
+    const totalZapl  = data.reduce((s,p)=>s+p.zapl,0);
+    const totalOpozn = data.reduce((s,p)=>s+p.opozn.length,0);
+    const ETAP_COL = {"Oferta zaakceptowana":"#1a6abf","Projektowanie i pozwolenia":"#92680a","Realizacja":"#3a7d1e","Odbiór":"#6b3db0","Zrealizowano":"#1a5c1a","NIEAKTYWNY":"#9ca3af"};
+    return (
+      <div style={{fontFamily:ff}}>
+        {/* KPI row */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:20}}>
+          {[
+            {l:"PROJEKTÓW AKTYWNYCH",v:data.length,unit:""},
+            {l:"ŁĄCZNA WARTOŚĆ UMÓW",v:złR(totalUmowa),unit:""},
+            {l:"ŁĄCZNIE OPŁACONO",v:złR(totalZapl),unit:""},
+            {l:"OPÓŹNIONE PŁATNOŚCI",v:totalOpozn,unit:"szt.",red:totalOpozn>0},
+          ].map(k=>(
+            <div key={k.l} style={{background:k.red?"#fbe8e8":"#f9fafb",border:`1px solid ${k.red?"#fca5a5":"#e8e8e3"}`,borderRadius:7,padding:"12px 14px"}}>
+              <div style={{fontSize:8,fontWeight:700,color:"#9ca3af",letterSpacing:"1px",textTransform:"uppercase",marginBottom:6}}>{k.l}</div>
+              <div style={{fontSize:20,fontWeight:900,color:k.red?"#b91c1c":"#1a1a1a",letterSpacing:"-0.5px"}}>{k.v}{k.unit&&<span style={{fontSize:11,marginLeft:4,color:"#6b7280"}}>{k.unit}</span>}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Projects table */}
+        <div style={{marginBottom:20}}>
+          <div style={{fontSize:10,fontWeight:700,color:"#9ca3af",letterSpacing:"1.5px",textTransform:"uppercase",marginBottom:8}}>STATUS PROJEKTÓW</div>
+          <div style={{background:"white",border:"1px solid #e8e8e3",borderRadius:8,overflow:"hidden"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+              <thead>
+                <tr style={{background:"#1a1a1a"}}>
+                  {["PROJEKT","KLIENT","ETAP","DATA","WARTOŚĆ UMOWY","OPŁACONO","POZOSTAŁO","OPÓŹNIENIA"].map(h=>(
+                    <th key={h} style={{padding:"7px 10px",fontSize:8,fontWeight:700,color:"rgba(255,255,255,.65)",letterSpacing:".8px",textAlign:"left",whiteSpace:"nowrap"}}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {data.map((p,i)=>(
+                  <tr key={p.id} style={{background:i%2?"#fafafa":"white",borderBottom:"1px solid #f3f4f6"}}>
+                    <td style={{padding:"6px 10px",fontWeight:700,color:"#1a1a1a"}}>{p.kodFull}</td>
+                    <td style={{padding:"6px 10px",color:"#6b7280"}}>{p.klient}</td>
+                    <td style={{padding:"6px 10px"}}>
+                      <span style={{background:"#f0f0ec",color:ETAP_COL[p.etap]||"#6b7280",fontSize:8,fontWeight:700,padding:"2px 6px",borderRadius:3}}>{p.etap}</span>
+                    </td>
+                    <td style={{padding:"6px 10px",color:"#9ca3af",fontSize:10,whiteSpace:"nowrap"}}>{fmtDate(p.data)}</td>
+                    <td style={{padding:"6px 10px",fontWeight:600,textAlign:"right",whiteSpace:"nowrap"}}>{złR(p.umowa)}</td>
+                    <td style={{padding:"6px 10px",color:"#4a7009",fontWeight:700,textAlign:"right",whiteSpace:"nowrap"}}>{złR(p.zapl)}</td>
+                    <td style={{padding:"6px 10px",color:"#6b7280",textAlign:"right",whiteSpace:"nowrap"}}>{złR(p.doZapl)}</td>
+                    <td style={{padding:"6px 10px",textAlign:"center"}}>
+                      {p.opozn.length>0
+                        ? <span style={{background:"#fbe8e8",color:"#b91c1c",fontSize:9,fontWeight:700,padding:"2px 8px",borderRadius:3}}>{p.opozn.length}</span>
+                        : <span style={{color:"#9ca3af",fontSize:11}}>—</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Payment progress bars */}
+        <div style={{marginBottom:20}}>
+          <div style={{fontSize:10,fontWeight:700,color:"#9ca3af",letterSpacing:"1.5px",textTransform:"uppercase",marginBottom:10}}>POSTĘP OPŁACENIA</div>
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            {data.filter(p=>p.umowa>0).map(p=>{
+              const p_ = pct(p.zapl,p.umowa);
+              return (
+                <div key={p.id}>
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
+                    <span style={{fontSize:11,fontWeight:700,color:"#1a1a1a"}}>{p.kodFull}</span>
+                    <span style={{fontSize:10,color:"#6b7280"}}>{p_}% · {złR(p.zapl)} / {złR(p.umowa)}</span>
+                  </div>
+                  <div style={{height:6,background:"#f0f0ec",borderRadius:3,overflow:"hidden"}}>
+                    <div style={{height:"100%",width:`${p_}%`,background:"#9ec417",borderRadius:3}}/>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Upcoming payments */}
+        {data.flatMap(p=>p.nadch.slice(0,2).map(pl=>({...pl,proj:p.kodFull}))).length>0 && (
+          <div>
+            <div style={{fontSize:10,fontWeight:700,color:"#9ca3af",letterSpacing:"1.5px",textTransform:"uppercase",marginBottom:8}}>NADCHODZĄCE PŁATNOŚCI</div>
+            <div style={{background:"white",border:"1px solid #e8e8e3",borderRadius:8,overflow:"hidden"}}>
+              {data.flatMap(p=>p.nadch.slice(0,3).map(pl=>({...pl,proj:p.kodFull}))).slice(0,8).map((pl,i)=>(
+                <div key={i} style={{display:"grid",gridTemplateColumns:"60px 1fr 100px 80px",gap:8,padding:"7px 12px",borderBottom:"1px solid #f3f4f6",fontSize:11,alignItems:"center"}}>
+                  <span style={{background:"#1a1a1a",color:"#9ec417",fontSize:9,fontWeight:700,padding:"2px 5px",borderRadius:3,textAlign:"center"}}>{pl.proj}</span>
+                  <span style={{color:"#6b7280"}}>{fmtDate(pl.data)}</span>
+                  <span style={{fontWeight:700,color:"#1a1a1a",textAlign:"right"}}>{złR(pl.netto)}</span>
+                  <span style={{fontSize:9,color:"#4472a8",background:"#edf3fb",padding:"2px 6px",borderRadius:3,textAlign:"center"}}>{pl.forma||"—"}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // ── RAPORT FINANSOWY ──────────────────────────────────────────────────────
+  const ReportFinansowy = ({data}) => {
+    const totalUmowa = data.reduce((s,p)=>s+p.umowa,0);
+    const totalZapl  = data.reduce((s,p)=>s+p.zapl,0);
+    const totalKoszt = data.reduce((s,p)=>s+p.koszt,0);
+    const totalZysk  = totalUmowa-totalKoszt;
+    const opoznItems = data.flatMap(p=>p.opozn.map(pl=>({...pl,proj:p.kodFull})));
+
+    const kosKat = ["architekt","elektryk","spawacz","fund","pracownicy","materialy","dodatkowe","paliwo"];
+    const kosLabels = ["Architekt","Elektryk","Spawacz","Fund.","Pracownicy","Materiały","Dodatkowe","Paliwo"];
+    const kosColors_ = ["#9ec417","#3b82f6","#f59e0b","#6366f1","#8b5cf6","#ef4444","#f97316","#06b6d4"];
+    const kosSum = kosKat.map((k,i)=>({
+      label:kosLabels[i], key:k, color:kosColors_[i],
+      val:data.reduce((s,p)=>s+(+(p.koszty[k]||0)),0)
+    }));
+    const kosMax = Math.max(...kosSum.map(k=>k.val),1);
+
+    return (
+      <div style={{fontFamily:ff}}>
+        {/* Financial KPIs */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:20}}>
+          {[
+            {l:"PRZYCHODY NETTO",   v:złR(totalUmowa),  accent:true},
+            {l:"PRZYCHODY BRUTTO",  v:złR(totalUmowa*1.08)},
+            {l:"ŁĄCZNE KOSZTY",     v:złR(totalKoszt), warn:true},
+            {l:"ZYSK / STRATA",     v:złR(totalZysk),  green:totalZysk>0, red:totalZysk<0},
+          ].map(k=>(
+            <div key={k.l} style={{background:k.red?"#fbe8e8":k.green?"#eef6d0":"#f9fafb",
+              border:`1px solid ${k.red?"#fca5a5":k.green?"#c8e87a":"#e8e8e3"}`,borderRadius:7,padding:"12px 14px"}}>
+              <div style={{fontSize:8,fontWeight:700,color:"#9ca3af",letterSpacing:"1px",textTransform:"uppercase",marginBottom:6}}>{k.l}</div>
+              <div style={{fontSize:18,fontWeight:900,color:k.red?"#b91c1c":k.green?"#4a7009":"#1a1a1a",letterSpacing:"-0.5px"}}>{k.v}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Per-project finances */}
+        <div style={{marginBottom:20}}>
+          <div style={{fontSize:10,fontWeight:700,color:"#9ca3af",letterSpacing:"1.5px",textTransform:"uppercase",marginBottom:8}}>FINANSE PER PROJEKT</div>
+          <div style={{background:"white",border:"1px solid #e8e8e3",borderRadius:8,overflow:"hidden"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+              <thead>
+                <tr style={{background:"#1a1a1a"}}>
+                  {["PROJEKT","WARTOŚĆ UMOWY","ZAPŁACONO","POZOSTAŁO","KOSZTY","ZYSK / STRATA","RENTOWNOŚĆ"].map(h=>(
+                    <th key={h} style={{padding:"7px 10px",fontSize:8,fontWeight:700,color:"rgba(255,255,255,.65)",letterSpacing:".8px",textAlign:"right",whiteSpace:"nowrap",":first-child":{textAlign:"left"}}}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {data.map((p,i)=>{
+                  const rent = p.umowa>0?pct(p.zysk,p.umowa):0;
+                  return (
+                    <tr key={p.id} style={{background:i%2?"#fafafa":"white",borderBottom:"1px solid #f3f4f6"}}>
+                      <td style={{padding:"6px 10px",fontWeight:700,color:"#1a1a1a"}}>{p.kodFull}</td>
+                      <td style={{padding:"6px 10px",textAlign:"right",fontWeight:600}}>{złR(p.umowa)}</td>
+                      <td style={{padding:"6px 10px",textAlign:"right",color:"#4a7009",fontWeight:700}}>{złR(p.zapl)}</td>
+                      <td style={{padding:"6px 10px",textAlign:"right",color:"#6b7280"}}>{złR(p.doZapl)}</td>
+                      <td style={{padding:"6px 10px",textAlign:"right",color:"#b91c1c"}}>{złR(p.koszt)}</td>
+                      <td style={{padding:"6px 10px",textAlign:"right",fontWeight:700,color:p.zysk>=0?"#4a7009":"#b91c1c"}}>{złR(p.zysk)}</td>
+                      <td style={{padding:"6px 10px",textAlign:"right"}}>
+                        <span style={{background:rent>=0?"#eef6d0":"#fbe8e8",color:rent>=0?"#4a7009":"#b91c1c",fontSize:9,fontWeight:700,padding:"2px 7px",borderRadius:3}}>{rent}%</span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Cost breakdown chart */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:20}}>
+          <div style={{background:"white",border:"1px solid #e8e8e3",borderRadius:8,padding:"14px 16px"}}>
+            <div style={{fontSize:10,fontWeight:700,color:"#9ca3af",letterSpacing:"1.5px",textTransform:"uppercase",marginBottom:10}}>KOSZTY WG KATEGORII</div>
+            <BarSVG items={kosSum.map(k=>({label:k.label,val:k.val,color:k.color}))} colorFn={it=>it.color} W={360} H={110}/>
+          </div>
+          <div style={{background:"white",border:"1px solid #e8e8e3",borderRadius:8,padding:"14px 16px"}}>
+            <div style={{fontSize:10,fontWeight:700,color:"#9ca3af",letterSpacing:"1.5px",textTransform:"uppercase",marginBottom:10}}>SZCZEGÓŁY KOSZTÓW</div>
+            <div style={{display:"flex",flexDirection:"column",gap:7}}>
+              {kosSum.map(k=>(
+                <div key={k.key} style={{display:"flex",alignItems:"center",gap:8}}>
+                  <div style={{width:8,height:8,borderRadius:2,background:k.color,flexShrink:0,opacity:.8}}/>
+                  <div style={{width:80,fontSize:10,color:"#6b7280",textTransform:"uppercase",flexShrink:0}}>{k.label}</div>
+                  <div style={{flex:1,height:5,background:"#f0f0ec",borderRadius:3,overflow:"hidden"}}>
+                    <div style={{height:"100%",width:`${Math.round(k.val/kosMax*100)}%`,background:k.color,opacity:.7,borderRadius:3}}/>
+                  </div>
+                  <div style={{width:80,fontSize:11,fontWeight:700,color:"#1a1a1a",textAlign:"right",flexShrink:0}}>{złR(k.val)}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Overdue payments */}
+        {opoznItems.length>0&&(
+          <div>
+            <div style={{fontSize:10,fontWeight:700,color:"#b91c1c",letterSpacing:"1.5px",textTransform:"uppercase",marginBottom:8}}>⚠ OPÓŹNIONE PŁATNOŚCI ({opoznItems.length})</div>
+            <div style={{background:"#fef2f2",border:"1px solid #fca5a5",borderRadius:8,overflow:"hidden"}}>
+              {opoznItems.map((pl,i)=>(
+                <div key={i} style={{display:"grid",gridTemplateColumns:"60px 1fr 100px",gap:8,padding:"7px 14px",borderBottom:"1px solid #fee2e2",fontSize:11,alignItems:"center"}}>
+                  <span style={{background:"#1a1a1a",color:"#9ec417",fontSize:9,fontWeight:700,padding:"2px 5px",borderRadius:3,textAlign:"center"}}>{pl.proj}</span>
+                  <span style={{color:"#6b7280"}}>{fmtDate(pl.data)}</span>
+                  <span style={{fontWeight:700,color:"#b91c1c",textAlign:"right"}}>{złR(pl.netto)}</span>
+                </div>
+              ))}
+              <div style={{padding:"8px 14px",textAlign:"right",fontSize:11,fontWeight:700,color:"#b91c1c",borderTop:"2px solid #fca5a5",background:"#fbe8e8"}}>
+                SUMA: {złR(opoznItems.reduce((s,p)=>s+(+p.netto),0))}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // ── PODSUMOWANIE DLA KLIENTA ──────────────────────────────────────────────
+  const ReportKlient = ({data}) => {
+    const p = data[0];
+    if(!p) return <div style={{color:"#9ca3af",fontFamily:ff,textAlign:"center",padding:40}}>BRAK DANYCH DLA WYBRANEGO PROJEKTU</div>;
+    const p_ = pct(p.zapl,p.umowa);
+    return (
+      <div style={{fontFamily:ff,maxWidth:700}}>
+        {/* Header */}
+        <div style={{background:"#1a1a1a",borderRadius:10,padding:"24px 28px",marginBottom:20,color:"white"}}>
+          <div style={{fontSize:10,color:"rgba(255,255,255,.4)",letterSpacing:"2px",textTransform:"uppercase",marginBottom:6}}>KAMP-BUD · DOMY ENERGOOSZCZĘDNE</div>
+          <div style={{fontSize:22,fontWeight:900,color:"#9ec417",letterSpacing:"-0.5px",marginBottom:4}}>Podsumowanie projektu</div>
+          <div style={{fontSize:16,fontWeight:700,color:"white"}}>{p.kodFull}</div>
+          {p.klient!=="—"&&<div style={{fontSize:13,color:"rgba(255,255,255,.55)",marginTop:4}}>Klient: {p.klient}</div>}
+        </div>
+
+        {/* Status */}
+        <div style={{background:"white",border:"1px solid #e8e8e3",borderRadius:8,padding:"16px 20px",marginBottom:14}}>
+          <div style={{fontSize:10,fontWeight:700,color:"#9ca3af",letterSpacing:"1.5px",textTransform:"uppercase",marginBottom:10}}>INFORMACJE O PROJEKCIE</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            {[
+              {l:"Data podpisania umowy",v:fmtDate(p.data)},
+              {l:"Aktualny etap",v:p.etap},
+            ].map(row=>(
+              <div key={row.l} style={{padding:"10px 12px",background:"#f9fafb",borderRadius:6}}>
+                <div style={{fontSize:9,color:"#9ca3af",letterSpacing:"1px",textTransform:"uppercase",marginBottom:4}}>{row.l}</div>
+                <div style={{fontSize:13,fontWeight:700,color:"#1a1a1a"}}>{row.v}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Payments */}
+        <div style={{background:"white",border:"1px solid #e8e8e3",borderRadius:8,padding:"16px 20px",marginBottom:14}}>
+          <div style={{fontSize:10,fontWeight:700,color:"#9ca3af",letterSpacing:"1.5px",textTransform:"uppercase",marginBottom:12}}>STAN PŁATNOŚCI</div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:14}}>
+            {[
+              {l:"WARTOŚĆ KONTRAKTU (NETTO)", v:złR(p.umowa),       col:"#1a1a1a"},
+              {l:"ZAPŁACONO",                 v:złR(p.zapl),        col:"#4a7009"},
+              {l:"POZOSTAŁO DO ZAPŁATY",      v:złR(p.doZapl),      col:p.doZapl>0?"#1a1a1a":"#4a7009"},
+            ].map(k=>(
+              <div key={k.l} style={{padding:"10px 12px",background:"#f9fafb",borderRadius:6}}>
+                <div style={{fontSize:8,color:"#9ca3af",letterSpacing:"1px",textTransform:"uppercase",marginBottom:4}}>{k.l}</div>
+                <div style={{fontSize:15,fontWeight:900,color:k.col}}>{k.v}</div>
+              </div>
+            ))}
+          </div>
+          {/* Progress */}
+          <div style={{marginBottom:4,display:"flex",justifyContent:"space-between"}}>
+            <span style={{fontSize:10,color:"#6b7280"}}>Postęp opłacenia kontraktu</span>
+            <span style={{fontSize:10,fontWeight:700,color:"#4a7009"}}>{p_}%</span>
+          </div>
+          <div style={{height:8,background:"#f0f0ec",borderRadius:4,overflow:"hidden"}}>
+            <div style={{height:"100%",width:`${p_}%`,background:"#9ec417",borderRadius:4}}/>
+          </div>
+        </div>
+
+        {/* Upcoming */}
+        {p.nadch.length>0&&(
+          <div style={{background:"#edf3fb",border:"1px solid #c5d8f0",borderRadius:8,padding:"14px 18px",marginBottom:14}}>
+            <div style={{fontSize:10,fontWeight:700,color:"#4472a8",letterSpacing:"1.5px",textTransform:"uppercase",marginBottom:10}}>NADCHODZĄCE PŁATNOŚCI</div>
+            {p.nadch.slice(0,3).map((pl,i)=>(
+              <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderBottom:i<Math.min(p.nadch.length,3)-1?"1px solid #c5d8f0":"none",fontSize:11}}>
+                <span style={{color:"#4472a8"}}>{fmtDate(pl.data)}</span>
+                <span style={{fontWeight:700,color:"#1a1a1a"}}>{złR(pl.netto)}</span>
+                <span style={{fontSize:9,color:"#6b7280"}}>{pl.forma||"—"}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Overdue */}
+        {p.opozn.length>0&&(
+          <div style={{background:"#fef2f2",border:"1px solid #fca5a5",borderRadius:8,padding:"14px 18px"}}>
+            <div style={{fontSize:10,fontWeight:700,color:"#b91c1c",letterSpacing:"1.5px",textTransform:"uppercase",marginBottom:8}}>⚠ ZALEGŁE PŁATNOŚCI ({p.opozn.length})</div>
+            {p.opozn.map((pl,i)=>(
+              <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderBottom:i<p.opozn.length-1?"1px solid #fee2e2":"none",fontSize:11}}>
+                <span style={{color:"#9ca3af"}}>{fmtDate(pl.data)}</span>
+                <span style={{fontWeight:700,color:"#b91c1c"}}>{złR(pl.netto)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // ── Export ────────────────────────────────────────────────────────────────
+  const exportPDF = () => {
+    const el = document.getElementById("report-content");
+    if(!el) return;
     const w = window.open("","_blank");
     w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
-      <title>Raport KAMP-BUD ${reportData.date}</title>
-      <style>
-        body{font-family:Arial,sans-serif;margin:40px;line-height:1.6;color:#1a1a1a;}
-        h1{color:#1a1a1a;border-bottom:3px solid #9ec417;padding-bottom:8px;}
-        h2{color:#4a7009;margin-top:24px;}
-        pre{white-space:pre-wrap;font-family:inherit;}
-        .header{display:flex;justify-content:space-between;margin-bottom:20px;}
-        .date{color:#6b7280;font-size:13px;}
-        @media print{body{margin:20px;}button{display:none;}}
-      </style></head><body>
-      <div class="header">
-        <h1>KAMP-BUD — ${reportData.type==="ogolny"?"RAPORT OGÓLNY":reportData.type==="finansowy"?"RAPORT FINANSOWY":"PODSUMOWANIE DLA KLIENTA"}</h1>
-        <span class="date">Data: ${reportData.date}</span>
-      </div>
-      <pre>${reportData.text.replace(/</g,"&lt;").replace(/>/g,"&gt;")}</pre>
-      <script>window.onload=()=>{window.print();}<\/script>
-      </body></html>`);
+    <title>Raport KAMP-BUD ${report.date}</title>
+    <style>
+      body{font-family:Arial,sans-serif;margin:30px;line-height:1.5;color:#1a1a1a;font-size:12px;}
+      table{width:100%;border-collapse:collapse;margin:10px 0;}
+      th{background:#1a1a1a;color:white;padding:6px 8px;font-size:10px;text-align:left;}
+      td{padding:5px 8px;border-bottom:1px solid #f0f0ec;}
+      tr:nth-child(even)td{background:#fafafa;}
+      h1{font-size:18px;margin-bottom:4px;}
+      h2{font-size:13px;color:#4a7009;margin-top:18px;}
+      .kpi{display:inline-block;border:1px solid #e8e8e3;border-radius:5px;padding:8px 12px;margin:4px;min-width:120px;}
+      .kpi-label{font-size:9px;color:#9ca3af;text-transform:uppercase;letter-spacing:1px;}
+      .kpi-val{font-size:16px;font-weight:bold;}
+      @media print{button{display:none;}}
+    </style></head><body>
+    <h1>KAMP-BUD — ${report.type==="ogolny"?"RAPORT OGÓLNY":report.type==="finansowy"?"RAPORT FINANSOWY":"PODSUMOWANIE DLA KLIENTA"}</h1>
+    <p style="color:#9ca3af;font-size:11px;">Data wygenerowania: ${report.date}</p>
+    ${el.innerHTML}
+    <script>window.onload=()=>{window.print();}<\/script>
+    </body></html>`);
     w.document.close();
   };
 
-  const exportToExcel = () => {
-    if(!reportData) return;
-    const lines = reportData.text.split('\n');
-    const rows = lines.map(l=>`"${l.replace(/"/g,'""')}"`).join('\n');
-    const csv = `"KAMP-BUD - ${reportData.type==="ogolny"?"RAPORT OGÓLNY":reportData.type==="finansowy"?"RAPORT FINANSOWY":"PODSUMOWANIE DLA KLIENTA"}"\n"Data: ${reportData.date}"\n\n${rows}`;
-    const blob = new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8"});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href=url; a.download=`raport_kamp_bud_${reportData.date.replace(/\./g,"-")}.csv`;
+  const exportCSV = () => {
+    if(!report) return;
+    const lines = [];
+    const rt = report.type;
+    lines.push(`"KAMP-BUD - ${rt==="ogolny"?"RAPORT OGÓLNY":rt==="finansowy"?"RAPORT FINANSOWY":"PODSUMOWANIE DLA KLIENTA"}"`);
+    lines.push(`"Data wygenerowania: ${report.date}"`);
+    lines.push("");
+    if(rt!=="klient") {
+      lines.push('"PROJEKT","KLIENT","ETAP","DATA","WARTOŚĆ UMOWY","ZAPŁACONO","POZOSTAŁO","KOSZTY","ZYSK"');
+      report.data.forEach(p=>{
+        lines.push(`"${p.kodFull}","${p.klient}","${p.etap}","${fmtDate(p.data)}","${p.umowa}","${p.zapl}","${p.doZapl}","${p.koszt}","${p.zysk}"`);
+      });
+    } else {
+      const p=report.data[0]||{};
+      lines.push(`"Projekt","${p.kodFull}"`);
+      lines.push(`"Klient","${p.klient}"`);
+      lines.push(`"Etap","${p.etap}"`);
+      lines.push(`"Wartość umowy netto","${p.umowa}"`);
+      lines.push(`"Zapłacono","${p.zapl}"`);
+      lines.push(`"Pozostało","${p.doZapl}"`);
+    }
+    const blob = new Blob(["\uFEFF"+lines.join("\n")],{type:"text/csv;charset=utf-8"});
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href=url; a.download=`raport_kamp_bud_${report.date.replace(/\./g,"-")}.csv`;
     a.click(); URL.revokeObjectURL(url);
   };
 
+  // ── UI ────────────────────────────────────────────────────────────────────
   const buttons = [
-    {key:"ogolny",    label:"RAPORT OGÓLNY",          sub:"Stan wszystkich projektów i prac", icon:"📋"},
-    {key:"finansowy", label:"RAPORT FINANSOWY",        sub:"Finanse, koszty, rentowność",      icon:"💰"},
-    {key:"klient",    label:"PODSUMOWANIE DLA KLIENTA",sub:"Dane tylko dla klienta",           icon:"👤"},
+    {key:"ogolny",    icon:"📋", label:"RAPORT OGÓLNY",           sub:"Stan projektów, postęp, płatności"},
+    {key:"finansowy", icon:"💰", label:"RAPORT FINANSOWY",         sub:"Koszty, zysk, rentowność, zaległości"},
+    {key:"klient",    icon:"👤", label:"PODSUMOWANIE DLA KLIENTA", sub:"Bez kosztów — tylko dane dla klienta"},
   ];
 
   return (
@@ -2270,6 +2593,8 @@ Zawrzyj: powitanie, aktualny etap prac, stan płatności, następne kroki.`;
         @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&display=swap');
         *{box-sizing:border-box;margin:0;padding:0;}
         body{background:#f4f4f0;font-family:'Barlow Condensed',sans-serif;}
+        .rbtn{transition:all .15s;cursor:pointer;}
+        .rbtn:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(0,0,0,.12)!important;}
       `}</style>
       <nav style={{background:"#1a1a1a",padding:"0 24px",display:"flex",alignItems:"center",
         height:54,boxShadow:"0 2px 6px rgba(0,0,0,.25)"}}>
@@ -2282,8 +2607,8 @@ Zawrzyj: powitanie, aktualny etap prac, stan płatności, następne kroki.`;
           <button onClick={onBack} style={{background:"transparent",border:"1px solid rgba(255,255,255,.3)",
             color:"rgba(255,255,255,.7)",padding:"5px 14px",borderRadius:4,cursor:"pointer",
             fontFamily:ff,fontWeight:700,fontSize:12,letterSpacing:"1px",textTransform:"uppercase",outline:"none"}}
-            onMouseOver={e=>{e.target.style.background="rgba(255,255,255,.1)";}}
-            onMouseOut={e=>{e.target.style.background="transparent";}}>
+            onMouseOver={e=>{e.currentTarget.style.background="rgba(255,255,255,.1)";}}
+            onMouseOut={e=>{e.currentTarget.style.background="transparent";}}>
             ← WSZYSTKIE PROJEKTY
           </button>
         </div>
@@ -2291,33 +2616,33 @@ Zawrzyj: powitanie, aktualny etap prac, stan płatności, następne kroki.`;
 
       <div style={{maxWidth:1100,margin:"0 auto",padding:"28px 28px 56px"}}>
         <div style={{marginBottom:24,paddingBottom:12,borderBottom:"2px solid #e8e8e3"}}>
-          <div style={{fontSize:22,fontWeight:900,color:"#1a1a1a",letterSpacing:"-0.3px",fontFamily:ff}}>RAPORTY</div>
+          <div style={{fontSize:22,fontWeight:900,color:"#1a1a1a",fontFamily:ff,letterSpacing:"-0.3px"}}>RAPORTY</div>
           <div style={{fontSize:10,color:"#9ca3af",letterSpacing:"1.5px",textTransform:"uppercase",marginTop:2,fontFamily:ff}}>
-            WYBIERZ RODZAJ RAPORTU · DATA: {today}
+            WYBIERZ RODZAJ · DATA: {today}
           </div>
         </div>
 
-        {/* Report type selector */}
-        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:14,marginBottom:24}}>
+        {/* Type selector */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginBottom:20}}>
           {buttons.map(b=>(
-            <div key={b.key}
-              onClick={()=>{ setView(b.key); setReportData(null); }}
-              style={{background: view===b.key?"#1a1a1a":"#fff",
+            <div key={b.key} className="rbtn"
+              onClick={()=>{setView(b.key);setReport(null);}}
+              style={{background:view===b.key?"#1a1a1a":"white",
                 border:`2px solid ${view===b.key?"#9ec417":"#e8e8e3"}`,
-                borderRadius:10,padding:"18px 20px",cursor:"pointer",
-                boxShadow:"0 1px 4px rgba(0,0,0,.07)",transition:"all .15s"}}>
-              <div style={{fontSize:28,marginBottom:8}}>{b.icon}</div>
-              <div style={{fontSize:14,fontWeight:900,color:view===b.key?"#9ec417":"#1a1a1a",
-                fontFamily:ff,letterSpacing:"-0.2px",marginBottom:4}}>{b.label}</div>
-              <div style={{fontSize:10,color:view===b.key?"rgba(255,255,255,.5)":"#9ca3af",fontFamily:ff}}>{b.sub}</div>
+                borderRadius:10,padding:"18px 20px",
+                boxShadow:"0 1px 4px rgba(0,0,0,.07)"}}>
+              <div style={{fontSize:26,marginBottom:8}}>{b.icon}</div>
+              <div style={{fontSize:13,fontWeight:900,fontFamily:ff,letterSpacing:"-0.2px",marginBottom:4,
+                color:view===b.key?"#9ec417":"#1a1a1a"}}>{b.label}</div>
+              <div style={{fontSize:10,fontFamily:ff,color:view===b.key?"rgba(255,255,255,.45)":"#9ca3af"}}>{b.sub}</div>
             </div>
           ))}
         </div>
 
-        {/* Project selector for client report */}
+        {/* Project selector */}
         {view==="klient"&&(
-          <div style={{marginBottom:16,display:"flex",alignItems:"center",gap:12}}>
-            <span style={{fontSize:11,fontWeight:700,color:"#6b7280",fontFamily:ff,letterSpacing:"1px",textTransform:"uppercase"}}>WYBIERZ PROJEKT:</span>
+          <div style={{marginBottom:14,display:"flex",alignItems:"center",gap:12}}>
+            <span style={{fontSize:11,fontWeight:700,color:"#6b7280",fontFamily:ff,letterSpacing:"1px",textTransform:"uppercase"}}>PROJEKT:</span>
             <select value={selProj} onChange={e=>setSelProj(e.target.value)}
               style={{padding:"6px 12px",borderRadius:5,border:"1px solid #e8e8e3",
                 fontSize:12,fontFamily:ff,fontWeight:700,cursor:"pointer",outline:"none",background:"white"}}>
@@ -2330,55 +2655,56 @@ Zawrzyj: powitanie, aktualny etap prac, stan płatności, następne kroki.`;
           </div>
         )}
 
-        {/* Generate button */}
-        {view&&(
-          <div style={{marginBottom:20}}>
-            <button onClick={()=>generateReport(view)} disabled={generating}
-              style={{padding:"10px 28px",background:generating?"#9ca3af":"#9ec417",color:"#1a1a1a",
-                border:"none",borderRadius:7,fontFamily:ff,fontWeight:900,fontSize:13,
-                letterSpacing:"1px",textTransform:"uppercase",cursor:generating?"wait":"pointer",
-                boxShadow:"0 2px 8px rgba(0,0,0,.15)",transition:"background .15s"}}>
-              {generating?"⏳ GENERUJĘ RAPORT...":"📄 GENERUJ RAPORT"}
-            </button>
-          </div>
+        {/* Generate */}
+        {view&&!report&&(
+          <button onClick={()=>generate(view)}
+            style={{padding:"10px 28px",background:"#9ec417",color:"#1a1a1a",border:"none",
+              borderRadius:7,fontFamily:ff,fontWeight:900,fontSize:13,
+              letterSpacing:"1px",textTransform:"uppercase",cursor:"pointer",
+              boxShadow:"0 2px 8px rgba(0,0,0,.15)",marginBottom:20}}>
+            📄 GENERUJ RAPORT
+          </button>
         )}
 
         {/* Report output */}
-        {reportData&&(
+        {report&&(
           <div style={{background:"white",border:"1px solid #e8e8e3",borderRadius:10,overflow:"hidden",
             boxShadow:"0 2px 8px rgba(0,0,0,.08)"}}>
-            {/* Header */}
             <div style={{background:"#1a1a1a",padding:"12px 20px",display:"flex",
-              alignItems:"center",justifyContent:"space-between"}}>
+              alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
               <div>
                 <div style={{fontSize:13,fontWeight:900,color:"#9ec417",fontFamily:ff,letterSpacing:"1px",textTransform:"uppercase"}}>
-                  {reportData.type==="ogolny"?"RAPORT OGÓLNY":reportData.type==="finansowy"?"RAPORT FINANSOWY":"PODSUMOWANIE DLA KLIENTA"}
+                  {report.type==="ogolny"?"RAPORT OGÓLNY":report.type==="finansowy"?"RAPORT FINANSOWY":"PODSUMOWANIE DLA KLIENTA"}
                 </div>
                 <div style={{fontSize:10,color:"rgba(255,255,255,.4)",fontFamily:ff,marginTop:2}}>
-                  KAMP-BUD · Data wygenerowania: {reportData.date}
+                  KAMP-BUD · Wygenerowano: {report.date}
                 </div>
               </div>
-              <div style={{display:"flex",gap:8}}>
-                <button onClick={exportToPDF}
+              <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                <button onClick={()=>{setReport(null);}}
+                  style={{padding:"6px 14px",background:"transparent",color:"rgba(255,255,255,.5)",
+                    border:"1px solid rgba(255,255,255,.2)",borderRadius:5,fontFamily:ff,
+                    fontWeight:700,fontSize:10,cursor:"pointer"}}>
+                  ← ZMIEŃ
+                </button>
+                <button onClick={exportPDF}
                   style={{padding:"6px 16px",background:"#9ec417",color:"#1a1a1a",border:"none",
                     borderRadius:5,fontFamily:ff,fontWeight:700,fontSize:10,cursor:"pointer",
                     letterSpacing:"1px"}}>
-                  📄 EKSPORT PDF
+                  📄 DRUKUJ / PDF
                 </button>
-                <button onClick={exportToExcel}
+                <button onClick={exportCSV}
                   style={{padding:"6px 16px",background:"white",color:"#1a1a1a",border:"none",
                     borderRadius:5,fontFamily:ff,fontWeight:700,fontSize:10,cursor:"pointer",
                     letterSpacing:"1px"}}>
-                  📊 EKSPORT CSV/EXCEL
+                  📊 EKSPORT CSV
                 </button>
               </div>
             </div>
-            {/* Content */}
-            <div style={{padding:"24px",maxHeight:600,overflowY:"auto"}}>
-              <pre style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:13,lineHeight:1.7,
-                color:"#1a1a1a",whiteSpace:"pre-wrap",wordBreak:"break-word"}}>
-                {reportData.text}
-              </pre>
+            <div id="report-content" style={{padding:"24px",maxHeight:680,overflowY:"auto"}}>
+              {report.type==="ogolny"    && <ReportOgolny    data={report.data}/>}
+              {report.type==="finansowy" && <ReportFinansowy data={report.data}/>}
+              {report.type==="klient"    && <ReportKlient    data={report.data}/>}
             </div>
           </div>
         )}
@@ -2392,6 +2718,7 @@ Zawrzyj: powitanie, aktualny etap prac, stan płatności, następne kroki.`;
     </>
   );
 }
+
 
 // ─── HOME SCREEN ──────────────────────────────────────────────────────────────
 function HomeScreen({ onSelect }) {
@@ -2561,7 +2888,7 @@ function HomeScreen({ onSelect }) {
                 minHeight:72,boxSizing:"border-box",overflow:"hidden"}}>
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
                 <span className="pid" style={{fontFamily:ff,fontWeight:900,fontSize:20,
-                  color:"#1a1a1a",letterSpacing:"-0.5px",flexShrink:0,lineHeight:1}}>CRM</span>
+                  color:"#1a1a1a",letterSpacing:"-0.5px",flexShrink:0,lineHeight:1}}>KONTAKTY</span>
                 <div style={{background:"#eef6d0",border:"1px solid #c8e87a",borderRadius:5,
                   padding:"3px 10px",fontSize:10,fontWeight:700,color:"#4a7009",
                   fontFamily:ff,letterSpacing:".5px",flexShrink:0,whiteSpace:"nowrap"}}>
@@ -2576,7 +2903,7 @@ function HomeScreen({ onSelect }) {
                 </span>
                 <span style={{fontSize:9,color:"#9ca3af",fontFamily:ff,
                   overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                  Leady · kontakty · statusy · follow-up
+                  Leady · statusy · follow-up
                 </span>
               </div>
             </div>
@@ -2650,6 +2977,137 @@ function HomeScreen({ onSelect }) {
                 textDecoration:isInactive?"line-through":"none"}}>{id==="ALL"?"WSZYSTKIE":id}</button>;
           })}
         </div>
+
+        {/* ── PROJECT TIMELINE ── */}
+        {(()=>{
+          const today2 = new Date(); today2.setHours(0,0,0,0);
+          const ETAP_LIST = [
+            "Oferta zaakceptowana",
+            "Projektowanie i pozwolenia",
+            "Realizacja",
+            "Odbiór",
+            "Zrealizowano",
+          ];
+          // Colors matching ETAP_STYLES in ProjectSheet
+          const ETAP_COL = {
+            "Oferta zaakceptowana":       {bg:"#dbeeff",color:"#1a6abf",border:"#a8cff0",dot:"#1a6abf"},
+            "Projektowanie i pozwolenia": {bg:"#fdf6e3",color:"#92680a",border:"#f0d898",dot:"#f59e0b"},
+            "Realizacja":                 {bg:"#e6fbd0",color:"#3a7d1e",border:"#b2e890",dot:"#9ec417"},
+            "Odbiór":                     {bg:"#f0eafb",color:"#6b3db0",border:"#d9c8f0",dot:"#8b5cf6"},
+            "Zrealizowano":               {bg:"#c8eac8",color:"#1a5c1a",border:"#7ec87e",dot:"#22c55e"},
+          };
+          const ETAP_SHORT = ["Oferta zaakceptowana","Projektowanie i pozwolenia","Realizacja","Odbiór","Zrealizowano"];
+
+          const tProjects = activeSnaps.map(s=>{
+            const info  = s.info || PROJECT_DEFAULTS[s.id] || {};
+            const etap  = info.etap || "Oferta zaakceptowana";
+            const start = info.data || "";
+            const kodFull = info.kod || s.id;
+            return { id:s.id, kodFull, klient:info.klient||"—", etap, start };
+          }).filter(p => p.etap !== "NIEAKTYWNY");
+
+          if(!tProjects.length) return null;
+
+          const activeIdx = (etap) => ETAP_LIST.indexOf(etap);
+
+          return (
+            <div style={{background:"white",border:"1px solid #e8e8e3",borderRadius:8,
+              overflow:"hidden",marginBottom:14,boxShadow:"0 1px 3px rgba(0,0,0,.05)"}}>
+
+              <table style={{width:"100%",borderCollapse:"collapse"}}>
+                <thead>
+                  <tr style={{background:"#f9fafb",borderBottom:"1px solid #e8e8e3"}}>
+                    <th style={{padding:"8px 10px",fontSize:9,fontWeight:700,color:"#9ca3af",
+                      letterSpacing:"1px",textAlign:"center",fontFamily:ff,width:28}}>LP.</th>
+                    <th style={{padding:"8px 14px",fontSize:9,fontWeight:700,color:"#9ca3af",
+                      letterSpacing:"1px",textAlign:"left",fontFamily:ff,minWidth:160}}>KLIENT</th>
+                    {ETAP_SHORT.map((e,i)=>{
+                      const col = ETAP_COL[e];
+                      return (
+                        <th key={i} style={{padding:"8px 10px",fontSize:8,fontWeight:700,
+                          color:col.color,letterSpacing:".5px",textAlign:"center",
+                          fontFamily:ff,maxWidth:120,borderLeft:"1px solid #f3f4f6"}}>
+                          {e.toUpperCase()}
+                        </th>
+                      );
+                    })}
+                  </tr>
+                </thead>
+                <tbody>
+                  {tProjects.map((p,ri)=>{
+                    const ai = activeIdx(p.etap);
+                    return (
+                      <tr key={p.id} style={{background:ri%2===0?"white":"#fafafa",
+                        borderBottom:"1px solid #f3f4f6"}}>
+                        {/* LP */}
+                        <td style={{padding:"8px 10px",textAlign:"center",fontSize:11,
+                          color:"#9ca3af",fontFamily:ff,fontWeight:700}}>{ri+1}</td>
+                        {/* Klient + data */}
+                        <td style={{padding:"8px 14px"}}>
+                          <div style={{fontWeight:700,fontSize:12,color:"#1a1a1a",fontFamily:ff}}>{p.klient}</div>
+                          {p.start&&<div style={{fontSize:9,color:"#9ca3af",fontFamily:ff,marginTop:1}}>
+                            {p.start.split("-").reverse().join(".")}
+                          </div>}
+                        </td>
+                        {/* Etap cells */}
+                        {ETAP_LIST.map((etap,ei)=>{
+                          const isDone   = ei < ai;
+                          const isActive = ei === ai;
+                          const isPending= ei > ai;
+                          const col = ETAP_COL[etap];
+                          return (
+                            <td key={ei} style={{padding:"6px 8px",textAlign:"center",
+                              verticalAlign:"middle",borderLeft:"1px solid #f3f4f6"}}>
+                              {isDone && (
+                                <div style={{display:"inline-flex",alignItems:"center",
+                                  justifyContent:"center",width:24,height:24,
+                                  background:col.bg,borderRadius:"50%",
+                                  border:`1.5px solid ${col.border}`}}>
+                                  <span style={{color:col.color,fontSize:11,fontWeight:900,lineHeight:1}}>✓</span>
+                                </div>
+                              )}
+                              {isActive && (
+                                <div style={{display:"inline-flex",alignItems:"center",gap:4,
+                                  background:col.bg,borderRadius:4,padding:"3px 8px",
+                                  border:`1px solid ${col.border}`,whiteSpace:"nowrap"}}>
+                                  <span style={{color:col.color,fontSize:9,fontWeight:700}}>►</span>
+                                  <span style={{color:col.color,fontSize:9,fontWeight:700,
+                                    fontFamily:ff,letterSpacing:".5px"}}>W TRAKCIE</span>
+                                </div>
+                              )}
+                              {isPending && (
+                                <div style={{display:"inline-flex",alignItems:"center",
+                                  justifyContent:"center",width:20,height:20,
+                                  borderRadius:"50%",border:"1.5px solid #e5e7eb"}}>
+                                </div>
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+
+              {/* Footer */}
+              <div style={{background:"#f9fafb",borderTop:"1px solid #e8e8e3",
+                padding:"6px 14px",display:"flex",alignItems:"center",gap:8}}>
+                <span style={{fontSize:9,fontFamily:ff,color:"#9ca3af",letterSpacing:".5px"}}>
+                  STAN NA: <strong style={{color:"#1a1a1a"}}>{today2.toLocaleDateString("pl-PL",{day:"2-digit",month:"long",year:"numeric"})}</strong>
+                </span>
+                <div style={{marginLeft:"auto",display:"flex",gap:12,flexWrap:"wrap"}}>
+                  {ETAP_LIST.map(e=>(
+                    <div key={e} style={{display:"flex",alignItems:"center",gap:4}}>
+                      <div style={{width:8,height:8,borderRadius:"50%",background:ETAP_COL[e].dot,flexShrink:0}}/>
+                      <span style={{fontSize:8,fontFamily:ff,color:"#9ca3af"}}>{e}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
         <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:14}}>
           {[
             {head:"WARTOŚĆ PROJEKTÓW (NETTO)",val:totalNetto,accent:true,red:false},
@@ -2697,4 +3155,314 @@ export default function App() {
   if (active) return <ErrorBoundary><ProjectSheet projectId={active} onBack={() => setActive(null)}/></ErrorBoundary>;
   return <ErrorBoundary><HomeScreen onSelect={setActive}/></ErrorBoundary>;
 }
-// v6
+// v12                        {ETAP_LIST.map((etap,ei)=>{
+                          const isDone   = ei < ai;
+                          const isActive = ei === ai;
+                          const isPending= ei > ai;
+                          const COL = {
+                            "Oferta zaakceptowana":       {bg:"#dbeeff",check:"#1a6abf",border:"#a8cff0",active:"#1a6abf"},
+                            "Projektowanie i pozwolenia": {bg:"#fdf6e3",check:"#92680a",border:"#f0d898",active:"#92680a"},
+                            "Realizacja":                 {bg:"#e6fbd0",check:"#3a7d1e",border:"#b2e890",active:"#3a7d1e"},
+                            "Odbiór":                     {bg:"#f0eafb",check:"#6b3db0",border:"#d9c8f0",active:"#6b3db0"},
+                            "Zrealizowano":               {bg:"#c8eac8",check:"#1a5c1a",border:"#7ec87e",active:"#1a5c1a"},
+                          };
+                          const col = COL[etap] || {bg:"#f0f0ec",check:"#6b7280",border:"#d1d5db",active:"#6b7280"};
+                          return (
+                            <td key={ei} style={{padding:"6px 8px",textAlign:"center",verticalAlign:"middle"}}>
+                              {isDone && (
+                                <div style={{display:"inline-flex",alignItems:"center",
+                                  justifyContent:"center",width:24,height:24,
+                                  background:col.bg,borderRadius:"50%",
+                                  border:`1.5px solid ${col.border}`}}>
+                                  <span style={{color:col.check,fontSize:12,fontWeight:900,lineHeight:1}}>✓</span>
+                                </div>
+                              )}
+                              {isActive && (
+                                <div style={{display:"inline-flex",alignItems:"center",gap:4,
+                                  background:col.active,borderRadius:4,padding:"3px 8px",
+                                  whiteSpace:"nowrap"}}>
+                                  <span style={{color:"white",fontSize:9,fontWeight:700}}>►</span>
+                                  <span style={{color:"white",fontSize:9,fontWeight:700,
+                                    fontFamily:ff,letterSpacing:".5px"}}>W TRAKCIE</span>
+                                </div>
+                              )}
+                              {isPending && (
+                                <div style={{display:"inline-flex",alignItems:"center",
+                                  justifyContent:"center",width:20,height:20,
+                                  borderRadius:"50%",border:"1.5px solid #e5e7eb"}}>
+                                </div>
+                              )}
+                            </td>
+                          );
+                        })}import React, { useState, useEffect, useRef } from "react";
+
+class ErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(e) { return { error: e }; }
+  render() {
+    if (this.state.error) return (
+      <div style={{padding:40,fontFamily:"monospace",background:"#fff0f0",minHeight:"100vh"}}>
+        <h2 style={{color:"red",marginBottom:16}}>Błąd aplikacji</h2>
+        <pre style={{background:"#fee",padding:16,borderRadius:8,fontSize:12,whiteSpace:"pre-wrap"}}>
+          {this.state.error?.toString()}{"\n\n"}{this.state.error?.stack}
+        </pre>
+      </div>
+    );
+    return this.props.children;
+  }
+}
+
+
+const C = {
+  navBg: "#1a1a1a",
+  green: "#b5e71d",
+  greenDark: "#7aaa0a",
+  greenLight: "#e8f9a0",
+  greenLighter: "#f4fcd8",
+  accent: "#f5f5f0",
+  border: "#e5e7eb",
+  textMain: "#1a1a1a",
+  textMuted: "#6b7280",
+};
+
+const ETAP_STYLES = {
+  "Oferta zaakceptowana":       { bg:"#dbeeff", color:"#1a6abf", border:"#a8cff0" },
+  "Projektowanie i pozwolenia": { bg:"#fdf6e3", color:"#92680a", border:"#f0d898" },
+  "Realizacja":                 { bg:"#e6fbd0", color:"#3a7d1e", border:"#b2e890" },
+  "Odbiór":                     { bg:"#f0eafb", color:"#6b3db0", border:"#d9c8f0" },
+  "Zrealizowano":               { bg:"#c8eac8", color:"#1a5c1a", border:"#7ec87e" },
+  "NIEAKTYWNY":                 { bg:"#f0f0f0", color:"#9ca3af", border:"#d1d5db" },
+};
+
+const SC = {
+  ZAAKCEPTOWANE: { bg:"white",   color:"#374151", border:"#e5e7eb" },
+  MODYFIKACJA:   { bg:"#fff3cd", color:"#856404", border:"#ffc107" },
+  REZYGNACJA:    { bg:"#f8d7da", color:"#721c24", border:"#f5c6cb" },
+  ZREALIZOWANE:  { bg:"#d4edda", color:"#155724", border:"#c3e6cb" },
+  "OPÓŹNIENIE":  { bg:"#fef9c3", color:"#854d0e", border:"#fde68a" },
+  PRZELEW:       { bg:"#d1ecf1", color:"#0c5460", border:"#bee5eb" },
+  GOTÓWKA:       { bg:"#d4edda", color:"#155724", border:"#c3e6cb" },
+  ZAPLANOWANE:   { bg:"#e2e3e5", color:"#383d41", border:"#d6d8db" },
+  TAK:           { bg:"#d4edda", color:"#155724", border:"#c3e6cb" },
+  NIE:           { bg:"#f8d7da", color:"#721c24", border:"#f5c6cb" },
+};
+
+const PROJEKT_OPTIONS = [
+  "77m² - PODDASZE","106m² - PODDASZE","114m² - PODDASZE","129m² - PODDASZE",
+  "61m² - PARTER","69m² - PARTER","78m² - PARTER","90m² - PARTER",
+  "100m² - PARTER","28m² - ZGŁOSZENIE","55m² - ZGŁOSZENIE","57m² - ZGŁOSZENIE","106m² - ZGŁOSZENIE",
+];
+const PROJEKT_CENY = {
+  "77m² - PODDASZE":323400,"106m² - PODDASZE":413400,"114m² - PODDASZE":456000,
+  "129m² - PODDASZE":541800,"61m² - PARTER":298900,"69m² - PARTER":345000,
+  "78m² - PARTER":390000,"90m² - PARTER":459000,"100m² - PARTER":510000,
+};
+const GARAZ_OPTIONS = ["NIE","JEDNOSTANOWISKOWY (4m szer.)","PÓŁTORASTANOWISKOWY (5m szer.)","DWUSTANOWISKOWY (6,75m szer.)","WIATA GARAŻOWA"];
+const GARAZ_CENY = {"NIE":0,"JEDNOSTANOWISKOWY (4m szer.)":2300,"PÓŁTORASTANOWISKOWY (5m szer.)":2400,"DWUSTANOWISKOWY (6,75m szer.)":2500,"WIATA GARAŻOWA":60000};
+const TARAS_OPTIONS = ["NIE","PEŁNA KONSTRUKCJA (bez zadaszenia)","SŁUPY FUNDAMENTOWE (bez konstrukcji)"];
+const TARAS_CENY = {"NIE":0,"PEŁNA KONSTRUKCJA (bez zadaszenia)":1300,"SŁUPY FUNDAMENTOWE (bez konstrukcji)":700};
+const GANEK_OPTIONS = ["NIE","PEŁNA KONSTRUKCJA (z dachem płaskim)"];
+const GANEK_CENY = {"NIE":0,"PEŁNA KONSTRUKCJA (z dachem płaskim)":6900};
+const ETAP_OPTIONS = ["Oferta zaakceptowana","Projektowanie i pozwolenia","Realizacja","Odbiór","Zrealizowano","NIEAKTYWNY"];
+const PLATNOSC_OPTIONS = ["PRZELEW","GOTÓWKA","ZAPLANOWANE","OPÓŹNIENIE"];
+const STATUS_TRANS_OPTIONS = ["","ZAAKCEPTOWANE","OPÓŹNIENIE","MODYFIKACJA","REZYGNACJA"];
+const STATUS_WORK_OPTIONS = ["","ZAAKCEPTOWANE","MODYFIKACJA","REZYGNACJA","OPÓŹNIENIE","ZREALIZOWANE"];
+const ZREAL_OPTIONS = ["TAK","NIE"];
+
+const DETALE_ARCH = [
+  {name:"Ozdoby w tynku elewacyjnym od 300 zł/m² + 8% VAT",price:300},
+  {name:"Drzwi zewnętrzne z przeszkleniem od 1 000 zł + 8% VAT",price:2500},
+  {name:"Dodatkowy metraż okien 950 zł/m² + 8% VAT",price:950},
+  {name:"Kolorystyka okien (jednostronna) 150 zł/m² + 8% VAT",price:150},
+  {name:"Szprosy w oknach od 80 zł/m² + 8% VAT",price:80},
+  {name:"Zadaszenie nad drzwiami wejściowymi: 4 000 zł + 8%VAT",price:4000},
+  {name:"Balustrada pojedyncza do okna balkonowego: 2 000 zł + 8%VAT",price:2000},
+  {name:"Schody tarasowe: 6 500 zł + 8%VAT",price:6500},
+  {name:"Przesunięcie słupa stalowego 2szt.: 4 000 zł + 8%VAT",price:2000},
+  {name:"Komin do kominka na pellet w kolorze: 1 000 zł + 8%VAT",price:1000},
+  {name:"Okno przesuwne w systemie SLIDE od 3 000 zł + 8% VAT",price:3000},
+  {name:"Rolety zewnętrzne elektryczne od 750 zł/m² + 8% VAT",price:750},
+  {name:"Żaluzje zewnętrzne – elektryczne od 1 500 zł/m² + 8% VAT",price:1500},
+  {name:"Podtynkowy montaż rolet lub żaluzji od 10 000 zł + 8% VAT",price:10000},
+  {name:"Jednostka rekuperacji Komfovent z wymiennikiem entalpicznym od 5 000 zł + 8% VAT",price:5000},
+  {name:"Jednostka rekuperacji przeniesiona na poddasze od 2 000 zł + 8% VAT",price:2000},
+  {name:"Dodatkowa instalacja klimatyzacji (bez jednostki) 3 000 zł + 8% VAT",price:3000},
+  {name:"Instalacja alarmowa i monitoringu od 2 500 zł + 8% VAT",price:2500},
+  {name:"Maty grzewcze w podłodze od 250 zł/m² + 8% VAT",price:250},
+  {name:"Schody wewnętrzne metalowe od 10 000 zł + 8% VAT",price:10000},
+  {name:"Balustrada stalowa do okna balkonowego od 2 000 zł + 8% VAT",price:2000},
+  {name:"Balustrada szklana do okna balkonowego od 3 000 zł + 8% VAT",price:3000},
+  {name:"Komin zewnętrzny w kolorze od 1 000 zł + 8% VAT",price:1000},
+  {name:"Przedłużenie dachu na ściany zewnętrzne od 10 000 zł + 8% VAT",price:10000},
+  {name:"Daszek nad drzwiami wejściowymi od 5 000 zł + 8% VAT",price:5000},
+  {name:"Zadaszenie wejścia ozdobne od 10 000 zł + 8% VAT",price:10000},
+  {name:"Przeniesienie słupa stalowego od 2 000 zł + 8% VAT",price:2000},
+  {name:"Usunięcie słupa stalowego i montaż dźwigara od 8 000 zł + 8% VAT",price:8000},
+  {name:"Projekt wnętrza wycena indywidualna",price:0},
+  {name:"Projekt elewacji wycena indywidualna",price:0},
+  {name:"Indywidualny projekt funkcjonalny wycena indywidualna",price:0},
+];
+
+// ─── helpers ────────────────────────────────────────────────────────────────
+const zł = (v) => {
+  if (!v && v !== 0) return "";
+  const n = Math.round(v);
+  return n.toLocaleString("pl-PL") + " zł";
+};
+const daysDiff = (dateStr) => {
+  if (!dateStr) return null;
+  const d = new Date(dateStr); d.setHours(0,0,0,0);
+  const t = new Date(); t.setHours(0,0,0,0);
+  return Math.ceil((t - d) / 86400000);
+};
+const fmt = (s) => {
+  if (!s) return "";
+  const [y,m,d] = s.split("-");
+  return `${d}.${m}.${y}`;
+};
+// Dashboard globals (shared with HomeScreen)
+const ff   = "'Barlow Condensed',sans-serif";
+const fmtD = fmt; // alias for dashboard use
+
+// ─── micro components ───────────────────────────────────────────────────────
+const Lbl = ({c}) => (
+  <div style={{fontSize:10,fontWeight:700,color:C.textMuted,letterSpacing:"0.5px",
+    textTransform:"uppercase",marginBottom:3,fontFamily:"'Barlow Condensed',sans-serif"}}>{c}</div>
+);
+
+const RO = ({v, small, bold}) => (
+  <div style={{background:C.greenLight,border:"1px solid #c8f041",borderRadius:4,
+    padding:small?"3px 7px":"5px 9px",fontSize:small?11:12,fontWeight:bold?700:600,
+    color:"#4a7009",display:"flex",alignItems:"center",justifyContent:"flex-end",
+    minHeight:small?24:30,fontFamily:"'Barlow Condensed',monospace"}}>
+    {v}
+  </div>
+);
+
+const TI = ({v, set, type="text", ph, style={}}) => (
+  <input type={type} value={v??""} onChange={e=>set(e.target.value)} placeholder={ph}
+    style={{width:"100%",padding:"5px 8px",borderRadius:4,fontSize:12,border:`1px solid ${C.border}`,
+      background:"white",color:C.textMain,outline:"none",boxSizing:"border-box",
+      fontFamily:"'Barlow Condensed',sans-serif",...style}}
+    onFocus={e=>e.target.style.borderColor=C.green}
+    onBlur={e=>e.target.style.borderColor=C.border}/>
+);
+
+const TS = ({v, set, opts, cm, style={}}) => {
+  const s = cm?(cm[v]||{}):{};
+  return (
+    <select value={v??""} onChange={e=>set(e.target.value)}
+      style={{width:"100%",padding:"5px 8px",borderRadius:4,fontSize:12,
+        border:`1px solid ${C.border}`,background:s.bg||"white",
+        color:s.color||C.textMain,fontWeight:s.bg?700:400,
+        outline:"none",boxSizing:"border-box",cursor:"pointer",
+        fontFamily:"'Barlow Condensed',sans-serif",...style}}>
+      {opts.map(o=><option key={o} value={o} style={{background:"white",color:C.textMain,fontWeight:400}}>{o||"–"}</option>)}
+    </select>
+  );
+};
+
+const TH = ({c,style={}}) => (
+  <th style={{background:C.green,color:"#1a1a1a",padding:"5px 7px",fontSize:10,fontWeight:700,
+    letterSpacing:"0.4px",textAlign:"center",whiteSpace:"nowrap",
+    fontFamily:"'Barlow Condensed',sans-serif",...style}}>{c}</th>
+);
+
+const SumBar = ({netto}) => (
+  <div style={{display:"flex",justifyContent:"flex-end",gap:16,marginTop:8,padding:"6px 10px",
+    background:C.greenLighter,borderRadius:4,fontSize:12,fontWeight:700,color:C.greenDark,
+    fontFamily:"'Barlow Condensed',sans-serif"}}>
+    SUMA NETTO: {zł(Math.round(netto))} &nbsp;|&nbsp; VAT 8%: {zł(Math.round(netto*0.08))} &nbsp;|&nbsp; BRUTTO: {zł(Math.round(netto*1.08))}
+  </div>
+);
+
+// Collapsible panel with button trigger
+const Panel = ({title, icon, color=C.green, children}) => {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{marginBottom:8,borderRadius:8,overflow:"hidden",
+      boxShadow:"0 1px 4px rgba(0,0,0,0.1)"}}>
+      <button onClick={()=>setOpen(o=>!o)} style={{
+        width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",
+        padding:"11px 16px",background:open?color:C.navBg,border:"none",cursor:"pointer",
+        color: open ? "#1a1a1a" : "white",
+        fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,
+        fontSize:13,letterSpacing:"0.8px",textTransform:"uppercase",transition:"background 0.2s",
+      }}>
+        <span style={{display:"flex",alignItems:"center",gap:8}}>{icon} {title}</span>
+        <span style={{fontSize:18,transition:"transform 0.25s",display:"inline-block",
+          transform:open?"rotate(180deg)":"none"}}>▾</span>
+      </button>
+      {open && (
+        <div style={{background:"white",padding:"14px 16px",
+          borderTop:`3px solid ${color}`}}>
+          {children}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Work rows table used for 3 sections
+const WorkTable = ({rows, upd}) => (
+  <div style={{overflowX:"auto"}}>
+    <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+      <thead><tr>
+        <TH c="LP." style={{width:30}}/>
+        <TH c="KATEGORIA" style={{textAlign:"left",minWidth:220}}/>
+        <TH c="CENA ZŁ/M²" style={{minWidth:80}}/>
+        <TH c="ILOŚĆ" style={{minWidth:55}}/>
+        <TH c="NETTO"/>
+        <TH c="VAT 8%"/>
+        <TH c="BRUTTO"/>
+        <TH c="STATUS" style={{minWidth:110}}/>
+      </tr></thead>
+      <tbody>
+        {rows.map((r,i)=>{
+          const n=(r.cena||0)*(r.qty||0);
+          const s=SC[r.status]||{};
+          const bg=r.status==="REZYGNACJA"?"#fff5f5":r.status==="OPÓŹNIENIE"?"#fef9c3":r.status==="ZREALIZOWANE"?"#f0fdf4":"white";
+          return (
+            <tr key={i} style={{background:bg}}>
+              <td style={{textAlign:"center",color:C.textMuted,fontSize:11,padding:"3px 5px"}}>{r.lp}</td>
+              <td style={{padding:"3px 5px"}}>
+                <input value={r.kat} onChange={e=>upd(i,"kat",e.target.value)}
+                  style={{width:"100%",padding:"3px 6px",border:`1px solid ${C.border}`,borderRadius:3,fontSize:11}}/>
+              </td>
+              <td style={{padding:"3px 4px"}}>
+                <input type="number" value={r.cena||""} onChange={e=>upd(i,"cena",e.target.value)}
+                  style={{width:"100%",padding:"3px 6px",border:`1px solid ${C.border}`,borderRadius:3,fontSize:11,textAlign:"right"}}/>
+              </td>
+              <td style={{padding:"3px 4px"}}>
+                <input type="number" value={r.qty||""} onChange={e=>upd(i,"qty",e.target.value)}
+                  style={{width:"100%",padding:"3px 6px",border:`1px solid ${C.border}`,borderRadius:3,fontSize:11,textAlign:"right"}}/>
+              </td>
+              <td style={{padding:"3px 4px"}}><RO v={zł(Math.round(n))} small/></td>
+              <td style={{padding:"3px 4px"}}><RO v={zł(Math.round(n*.08))} small/></td>
+              <td style={{padding:"3px 4px"}}><RO v={zł(Math.round(n*1.08))} small/></td>
+              <td style={{padding:"3px 4px"}}>
+                <select value={r.status} onChange={e=>upd(i,"status",e.target.value)}
+                  style={{width:"100%",padding:"3px 5px",border:`1px solid ${C.border}`,borderRadius:3,
+                    fontSize:11,background:s.bg||"white",color:s.color||C.textMain,fontWeight:s.bg?700:400}}>
+                  {STATUS_WORK_OPTIONS.map(o=><option key={o} value={o} style={{background:"white",color:C.textMain}}>{o||"–"}</option>)}
+                </select>
+              </td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  </div>
+);
+
+// ─── project defaults per ID ─────────────────────────────────────────────────
+const PROJECT_DEFAULTS = {
+  A1: { kod:"A1", klient:"Józef Robak",      tel:"555 555 555", email:"jozef.robak@gmail.com",   data:"2026-03-15", etap:"Zrealizowano" },
+  B2: { kod:"B2", klient:"Mikołaj Firmanty", tel:"600 100 200", email:"m.firmanty@gmail.com",    data:"2026-03-20", etap:"Projektowanie i pozwolenia" },
+  C3: { kod:"C3", klient:"Patryk Bujanowicz",tel:"700 200 300", email:"p.bujanowicz@gmail.com",  data:"2026-02-10", etap:"Realizacja" },
+  D4: { kod:"D4", klient:"Johnny Walker",    tel:"800 300 400", email:"j.walker@gmail.com",       data:"2026-03-20", etap:"Oferta zaakceptowana" },
+  E5: { kod:"E5", klient:"",                 tel:"",            email:"",                         data:"",           etap:"Oferta zaakceptowana" },
+  D6: { kod:"D6", klient:"",                 tel:"",            email:"",                         data:"",           etap:"Oferta zaakceptowana" },
+};
+
+// ─── main sheet component ─────────────────────────────────────────────────────
