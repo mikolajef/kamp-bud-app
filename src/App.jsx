@@ -3004,7 +3004,7 @@ function HomeScreen({ onSelect }) {
             id: p.id,
             klient: p.klient,
             etap: p.etap,
-            start: p.data || "",
+            start: p.data,
           }));
 
           if(!tProjects.length) return null;
@@ -3467,4 +3467,4 @@ const PROJECT_DEFAULTS = {
 };
 
 // ─── main sheet component ─────────────────────────────────────────────────────
-// build: 20260429205606
+// build: 20260429205215
