@@ -1050,17 +1050,14 @@ function PieChart({ snaps }) {
 const CRM_STATUS_STYLES = {
   "Aktywny":              {bg:"#e6fbd0",color:"#3a7d1e",border:"#b2e890"},
   "W trakcie":            {bg:"#dbeeff",color:"#1a6abf",border:"#a8cff0"},
-  "Oferta wysłana":       {bg:"#fdf6e3",color:"#92680a",border:"#f0d898"},
-  "Pytania klienta":      {bg:"#f0eafb",color:"#6b3db0",border:"#d9c8f0"},
   "Rezygnacja z oferty":  {bg:"#fbe8e8",color:"#b91c1c",border:"#fca5a5"},
-  "Do ponowienia":        {bg:"#f0f0ec",color:"#6b7280",border:"#d1d5db"},
 };
 const CRM_PRIO_STYLES = {
   "Wysoki": {bg:"#fbe8e8",color:"#b91c1c"},
   "Średni": {bg:"#fdf6e3",color:"#92680a"},
   "Niski":  {bg:"#f0f0ec",color:"#6b7280"},
 };
-const CRM_STATUS_OPTIONS = ["Aktywny","W trakcie","Oferta wysłana","Pytania klienta","Rezygnacja z oferty","Do ponowienia"];
+const CRM_STATUS_OPTIONS = ["Aktywny","Oczekuje odpowiedzi","Brak odpowiedzi","Rezygnacja z oferty"];
 const CRM_PRIO_OPTIONS   = ["Wysoki","Średni","Niski"];
 const CRM_SOURCE_OPTIONS = ["Facebook","Instagram","Google","Polecenie","Strona WWW","Inne"];
 const CRM_KEY = "kamp-bud-crm-leads";
@@ -1096,9 +1093,9 @@ const TS2 = ({v,set,opts,cm}) => {
 
 // ── CRM action status options with colors ─────────────────────────────────
 const CRM_ACTION_OPTIONS = [
-  "Oferta przesłana","Ponowienie kontaktu","Klient zadał pytania",
-  "Odpowiedź wysłana","Umówiono spotkanie","Po spotkaniu – czeka",
-  "Rezygnacja z oferty","Brak odpowiedzi","Finalizacja","Zrealizowano",
+  "Oferta przesłana","Ponowienie kontaktu",
+  "Odpowiedź wysłana","Umówiono spotkanie",
+  "Rezygnacja z oferty","Brak odpowiedzi",
 ];
 const CRM_ACTION_STYLES = {
   "Oferta przesłana":      {bg:"#dbeeff",color:"#1a6abf",border:"#a8cff0"},
@@ -1834,7 +1831,7 @@ function CRMPanel({ onDataChange }) {
     // seed with Excel data
     return [
       {id:1,imie:"Adam",nazwisko:"Adamski",email:"Biuro@cyberopieka.org",tel:"691450300",zrodlo:"Facebook",model:"106 m²",dataKontaktu:"2026-04-22",ostatniaAkcja:"Oferta przesłana",dataAkcji:"2026-04-27",nastepneDzialanie:"Ponowienie kontaktu",dataNastepnego:"2026-04-24",status:"Aktywny",priorytet:"Wysoki",notatki:"Zainteresowany modelem 106, pyta o garaż",odpowiedzialny:"Mikołaj",kontakty:2},
-      {id:2,imie:"Sebastian",nazwisko:"Subocz",email:"suboczsebastian@gmail.com",tel:"666555145",zrodlo:"Facebook",model:"106 m²",dataKontaktu:"2026-04-08",ostatniaAkcja:"Klient zadał pytania",dataAkcji:"2026-04-09",nastepneDzialanie:"Odpowiedź na pytania",dataNastepnego:"2026-04-15",status:"W trakcie",priorytet:"Wysoki",notatki:"Pytania o finansowanie i czas realizacji",odpowiedzialny:"Mikołaj",kontakty:3},
+      {id:2,imie:"Sebastian",nazwisko:"Subocz",email:"suboczsebastian@gmail.com",tel:"666555145",zrodlo:"Facebook",model:"106 m²",dataKontaktu:"2026-04-08",ostatniaAkcja:dataAkcji:"2026-04-09",nastepneDzialanie:"Odpowiedź na pytania",dataNastepnego:"2026-04-15",status:"W trakcie",priorytet:"Wysoki",notatki:"Pytania o finansowanie i czas realizacji",odpowiedzialny:"Mikołaj",kontakty:3},
       {id:3,imie:"Piotr",nazwisko:"Zając",email:"p.zajac@onet.pl",tel:"505058371",zrodlo:"Facebook",model:"106 m²",dataKontaktu:"2026-03-25",ostatniaAkcja:"Ponowienie kontaktu",dataAkcji:"2026-04-01",nastepneDzialanie:"Telefoniczny follow-up",dataNastepnego:"2026-04-20",status:"W trakcie",priorytet:"Średni",notatki:"Odwiedził dom pokazowy, rozważa mniejszy model",odpowiedzialny:"Mikołaj",kontakty:4},
       {id:4,imie:"Maria",nazwisko:"Wiśniewska",email:"m.wisniewska@gmail.com",tel:"886518533",zrodlo:"Facebook",model:"106 m²",dataKontaktu:"2026-04-15",ostatniaAkcja:"Oferta przesłana",dataAkcji:"2026-04-15",nastepneDzialanie:"Czeka na decyzję",dataNastepnego:"2026-04-30",status:"Aktywny",priorytet:"Wysoki",notatki:"Polecona przez klienta Robaka, decyzja do końca miesiąca",odpowiedzialny:"Mikołaj",kontakty:1},
       {id:5,imie:"Tomasz",nazwisko:"Dąbrowski",email:"t.dabrowski@interia.pl",tel:"696022450",zrodlo:"Facebook",model:"106 m²",dataKontaktu:"2026-02-10",ostatniaAkcja:"Rezygnacja z oferty",dataAkcji:"2026-03-01",nastepneDzialanie:"Brak",dataNastepnego:"2026-04-23",status:"Rezygnacja z oferty",priorytet:"Niski",notatki:"Wybrał inną firmę – cena",odpowiedzialny:"Mikołaj",kontakty:5},
@@ -3004,11 +3001,10 @@ function HomeScreen({ onSelect }) {
             id: p.id,
             klient: p.klient,
             etap: p.etap,
-            start: p.data || "",
+            start: p.data,
           }));
 
-          if(!tProjects.length) { console.log('TIMELINE: tProjects empty, projects=', projects); return null; }
-          console.log('TIMELINE: tProjects=', tProjects);
+          if(!tProjects.length) return null;
 
           const activeIdx = (etap) => ETAP_LIST.indexOf(etap);
 
@@ -3157,4 +3153,315 @@ export default function App() {
   if (active) return <ErrorBoundary><ProjectSheet projectId={active} onBack={() => setActive(null)}/></ErrorBoundary>;
   return <ErrorBoundary><HomeScreen onSelect={setActive}/></ErrorBoundary>;
 }
-// build: 20260430082713
+// v12                        {ETAP_LIST.map((etap,ei)=>{
+                          const isDone   = ei < ai;
+                          const isActive = ei === ai;
+                          const isPending= ei > ai;
+                          const COL = {
+                            "Oferta zaakceptowana":       {bg:"#dbeeff",check:"#1a6abf",border:"#a8cff0",active:"#1a6abf"},
+                            "Projektowanie i pozwolenia": {bg:"#fdf6e3",check:"#92680a",border:"#f0d898",active:"#92680a"},
+                            "Realizacja":                 {bg:"#e6fbd0",check:"#3a7d1e",border:"#b2e890",active:"#3a7d1e"},
+                            "Odbiór":                     {bg:"#f0eafb",check:"#6b3db0",border:"#d9c8f0",active:"#6b3db0"},
+                            "Zrealizowano":               {bg:"#c8eac8",check:"#1a5c1a",border:"#7ec87e",active:"#1a5c1a"},
+                          };
+                          const col = COL[etap] || {bg:"#f0f0ec",check:"#6b7280",border:"#d1d5db",active:"#6b7280"};
+                          return (
+                            <td key={ei} style={{padding:"6px 8px",textAlign:"center",verticalAlign:"middle"}}>
+                              {isDone && (
+                                <div style={{display:"inline-flex",alignItems:"center",
+                                  justifyContent:"center",width:24,height:24,
+                                  background:col.bg,borderRadius:"50%",
+                                  border:`1.5px solid ${col.border}`}}>
+                                  <span style={{color:col.check,fontSize:12,fontWeight:900,lineHeight:1}}>✓</span>
+                                </div>
+                              )}
+                              {isActive && (
+                                <div style={{display:"inline-flex",alignItems:"center",gap:4,
+                                  background:col.active,borderRadius:4,padding:"3px 8px",
+                                  whiteSpace:"nowrap"}}>
+                                  <span style={{color:"white",fontSize:9,fontWeight:700}}>►</span>
+                                  <span style={{color:"white",fontSize:9,fontWeight:700,
+                                    fontFamily:ff,letterSpacing:".5px"}}>W TRAKCIE</span>
+                                </div>
+                              )}
+                              {isPending && (
+                                <div style={{display:"inline-flex",alignItems:"center",
+                                  justifyContent:"center",width:20,height:20,
+                                  borderRadius:"50%",border:"1.5px solid #e5e7eb"}}>
+                                </div>
+                              )}
+                            </td>
+                          );
+                        })}import React, { useState, useEffect, useRef } from "react";
+
+class ErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(e) { return { error: e }; }
+  render() {
+    if (this.state.error) return (
+      <div style={{padding:40,fontFamily:"monospace",background:"#fff0f0",minHeight:"100vh"}}>
+        <h2 style={{color:"red",marginBottom:16}}>Błąd aplikacji</h2>
+        <pre style={{background:"#fee",padding:16,borderRadius:8,fontSize:12,whiteSpace:"pre-wrap"}}>
+          {this.state.error?.toString()}{"\n\n"}{this.state.error?.stack}
+        </pre>
+      </div>
+    );
+    return this.props.children;
+  }
+}
+
+
+const C = {
+  navBg: "#1a1a1a",
+  green: "#b5e71d",
+  greenDark: "#7aaa0a",
+  greenLight: "#e8f9a0",
+  greenLighter: "#f4fcd8",
+  accent: "#f5f5f0",
+  border: "#e5e7eb",
+  textMain: "#1a1a1a",
+  textMuted: "#6b7280",
+};
+
+const ETAP_STYLES = {
+  "Oferta zaakceptowana":       { bg:"#dbeeff", color:"#1a6abf", border:"#a8cff0" },
+  "Projektowanie i pozwolenia": { bg:"#fdf6e3", color:"#92680a", border:"#f0d898" },
+  "Realizacja":                 { bg:"#e6fbd0", color:"#3a7d1e", border:"#b2e890" },
+  "Odbiór":                     { bg:"#f0eafb", color:"#6b3db0", border:"#d9c8f0" },
+  "Zrealizowano":               { bg:"#c8eac8", color:"#1a5c1a", border:"#7ec87e" },
+  "NIEAKTYWNY":                 { bg:"#f0f0f0", color:"#9ca3af", border:"#d1d5db" },
+};
+
+const SC = {
+  ZAAKCEPTOWANE: { bg:"white",   color:"#374151", border:"#e5e7eb" },
+  MODYFIKACJA:   { bg:"#fff3cd", color:"#856404", border:"#ffc107" },
+  REZYGNACJA:    { bg:"#f8d7da", color:"#721c24", border:"#f5c6cb" },
+  ZREALIZOWANE:  { bg:"#d4edda", color:"#155724", border:"#c3e6cb" },
+  "OPÓŹNIENIE":  { bg:"#fef9c3", color:"#854d0e", border:"#fde68a" },
+  PRZELEW:       { bg:"#d1ecf1", color:"#0c5460", border:"#bee5eb" },
+  GOTÓWKA:       { bg:"#d4edda", color:"#155724", border:"#c3e6cb" },
+  ZAPLANOWANE:   { bg:"#e2e3e5", color:"#383d41", border:"#d6d8db" },
+  TAK:           { bg:"#d4edda", color:"#155724", border:"#c3e6cb" },
+  NIE:           { bg:"#f8d7da", color:"#721c24", border:"#f5c6cb" },
+};
+
+const PROJEKT_OPTIONS = [
+  "77m² - PODDASZE","106m² - PODDASZE","114m² - PODDASZE","129m² - PODDASZE",
+  "61m² - PARTER","69m² - PARTER","78m² - PARTER","90m² - PARTER",
+  "100m² - PARTER","28m² - ZGŁOSZENIE","55m² - ZGŁOSZENIE","57m² - ZGŁOSZENIE","106m² - ZGŁOSZENIE",
+];
+const PROJEKT_CENY = {
+  "77m² - PODDASZE":323400,"106m² - PODDASZE":413400,"114m² - PODDASZE":456000,
+  "129m² - PODDASZE":541800,"61m² - PARTER":298900,"69m² - PARTER":345000,
+  "78m² - PARTER":390000,"90m² - PARTER":459000,"100m² - PARTER":510000,
+};
+const GARAZ_OPTIONS = ["NIE","JEDNOSTANOWISKOWY (4m szer.)","PÓŁTORASTANOWISKOWY (5m szer.)","DWUSTANOWISKOWY (6,75m szer.)","WIATA GARAŻOWA"];
+const GARAZ_CENY = {"NIE":0,"JEDNOSTANOWISKOWY (4m szer.)":2300,"PÓŁTORASTANOWISKOWY (5m szer.)":2400,"DWUSTANOWISKOWY (6,75m szer.)":2500,"WIATA GARAŻOWA":60000};
+const TARAS_OPTIONS = ["NIE","PEŁNA KONSTRUKCJA (bez zadaszenia)","SŁUPY FUNDAMENTOWE (bez konstrukcji)"];
+const TARAS_CENY = {"NIE":0,"PEŁNA KONSTRUKCJA (bez zadaszenia)":1300,"SŁUPY FUNDAMENTOWE (bez konstrukcji)":700};
+const GANEK_OPTIONS = ["NIE","PEŁNA KONSTRUKCJA (z dachem płaskim)"];
+const GANEK_CENY = {"NIE":0,"PEŁNA KONSTRUKCJA (z dachem płaskim)":6900};
+const ETAP_OPTIONS = ["Oferta zaakceptowana","Projektowanie i pozwolenia","Realizacja","Odbiór","Zrealizowano","NIEAKTYWNY"];
+const PLATNOSC_OPTIONS = ["PRZELEW","GOTÓWKA","ZAPLANOWANE","OPÓŹNIENIE"];
+const STATUS_TRANS_OPTIONS = ["","ZAAKCEPTOWANE","OPÓŹNIENIE","MODYFIKACJA","REZYGNACJA"];
+const STATUS_WORK_OPTIONS = ["","ZAAKCEPTOWANE","MODYFIKACJA","REZYGNACJA","OPÓŹNIENIE","ZREALIZOWANE"];
+const ZREAL_OPTIONS = ["TAK","NIE"];
+
+const DETALE_ARCH = [
+  {name:"Ozdoby w tynku elewacyjnym od 300 zł/m² + 8% VAT",price:300},
+  {name:"Drzwi zewnętrzne z przeszkleniem od 1 000 zł + 8% VAT",price:2500},
+  {name:"Dodatkowy metraż okien 950 zł/m² + 8% VAT",price:950},
+  {name:"Kolorystyka okien (jednostronna) 150 zł/m² + 8% VAT",price:150},
+  {name:"Szprosy w oknach od 80 zł/m² + 8% VAT",price:80},
+  {name:"Zadaszenie nad drzwiami wejściowymi: 4 000 zł + 8%VAT",price:4000},
+  {name:"Balustrada pojedyncza do okna balkonowego: 2 000 zł + 8%VAT",price:2000},
+  {name:"Schody tarasowe: 6 500 zł + 8%VAT",price:6500},
+  {name:"Przesunięcie słupa stalowego 2szt.: 4 000 zł + 8%VAT",price:2000},
+  {name:"Komin do kominka na pellet w kolorze: 1 000 zł + 8%VAT",price:1000},
+  {name:"Okno przesuwne w systemie SLIDE od 3 000 zł + 8% VAT",price:3000},
+  {name:"Rolety zewnętrzne elektryczne od 750 zł/m² + 8% VAT",price:750},
+  {name:"Żaluzje zewnętrzne – elektryczne od 1 500 zł/m² + 8% VAT",price:1500},
+  {name:"Podtynkowy montaż rolet lub żaluzji od 10 000 zł + 8% VAT",price:10000},
+  {name:"Jednostka rekuperacji Komfovent z wymiennikiem entalpicznym od 5 000 zł + 8% VAT",price:5000},
+  {name:"Jednostka rekuperacji przeniesiona na poddasze od 2 000 zł + 8% VAT",price:2000},
+  {name:"Dodatkowa instalacja klimatyzacji (bez jednostki) 3 000 zł + 8% VAT",price:3000},
+  {name:"Instalacja alarmowa i monitoringu od 2 500 zł + 8% VAT",price:2500},
+  {name:"Maty grzewcze w podłodze od 250 zł/m² + 8% VAT",price:250},
+  {name:"Schody wewnętrzne metalowe od 10 000 zł + 8% VAT",price:10000},
+  {name:"Balustrada stalowa do okna balkonowego od 2 000 zł + 8% VAT",price:2000},
+  {name:"Balustrada szklana do okna balkonowego od 3 000 zł + 8% VAT",price:3000},
+  {name:"Komin zewnętrzny w kolorze od 1 000 zł + 8% VAT",price:1000},
+  {name:"Przedłużenie dachu na ściany zewnętrzne od 10 000 zł + 8% VAT",price:10000},
+  {name:"Daszek nad drzwiami wejściowymi od 5 000 zł + 8% VAT",price:5000},
+  {name:"Zadaszenie wejścia ozdobne od 10 000 zł + 8% VAT",price:10000},
+  {name:"Przeniesienie słupa stalowego od 2 000 zł + 8% VAT",price:2000},
+  {name:"Usunięcie słupa stalowego i montaż dźwigara od 8 000 zł + 8% VAT",price:8000},
+  {name:"Projekt wnętrza wycena indywidualna",price:0},
+  {name:"Projekt elewacji wycena indywidualna",price:0},
+  {name:"Indywidualny projekt funkcjonalny wycena indywidualna",price:0},
+];
+
+// ─── helpers ────────────────────────────────────────────────────────────────
+const zł = (v) => {
+  if (!v && v !== 0) return "";
+  const n = Math.round(v);
+  return n.toLocaleString("pl-PL") + " zł";
+};
+const daysDiff = (dateStr) => {
+  if (!dateStr) return null;
+  const d = new Date(dateStr); d.setHours(0,0,0,0);
+  const t = new Date(); t.setHours(0,0,0,0);
+  return Math.ceil((t - d) / 86400000);
+};
+const fmt = (s) => {
+  if (!s) return "";
+  const [y,m,d] = s.split("-");
+  return `${d}.${m}.${y}`;
+};
+// Dashboard globals (shared with HomeScreen)
+const ff   = "'Barlow Condensed',sans-serif";
+const fmtD = fmt; // alias for dashboard use
+
+// ─── micro components ───────────────────────────────────────────────────────
+const Lbl = ({c}) => (
+  <div style={{fontSize:10,fontWeight:700,color:C.textMuted,letterSpacing:"0.5px",
+    textTransform:"uppercase",marginBottom:3,fontFamily:"'Barlow Condensed',sans-serif"}}>{c}</div>
+);
+
+const RO = ({v, small, bold}) => (
+  <div style={{background:C.greenLight,border:"1px solid #c8f041",borderRadius:4,
+    padding:small?"3px 7px":"5px 9px",fontSize:small?11:12,fontWeight:bold?700:600,
+    color:"#4a7009",display:"flex",alignItems:"center",justifyContent:"flex-end",
+    minHeight:small?24:30,fontFamily:"'Barlow Condensed',monospace"}}>
+    {v}
+  </div>
+);
+
+const TI = ({v, set, type="text", ph, style={}}) => (
+  <input type={type} value={v??""} onChange={e=>set(e.target.value)} placeholder={ph}
+    style={{width:"100%",padding:"5px 8px",borderRadius:4,fontSize:12,border:`1px solid ${C.border}`,
+      background:"white",color:C.textMain,outline:"none",boxSizing:"border-box",
+      fontFamily:"'Barlow Condensed',sans-serif",...style}}
+    onFocus={e=>e.target.style.borderColor=C.green}
+    onBlur={e=>e.target.style.borderColor=C.border}/>
+);
+
+const TS = ({v, set, opts, cm, style={}}) => {
+  const s = cm?(cm[v]||{}):{};
+  return (
+    <select value={v??""} onChange={e=>set(e.target.value)}
+      style={{width:"100%",padding:"5px 8px",borderRadius:4,fontSize:12,
+        border:`1px solid ${C.border}`,background:s.bg||"white",
+        color:s.color||C.textMain,fontWeight:s.bg?700:400,
+        outline:"none",boxSizing:"border-box",cursor:"pointer",
+        fontFamily:"'Barlow Condensed',sans-serif",...style}}>
+      {opts.map(o=><option key={o} value={o} style={{background:"white",color:C.textMain,fontWeight:400}}>{o||"–"}</option>)}
+    </select>
+  );
+};
+
+const TH = ({c,style={}}) => (
+  <th style={{background:C.green,color:"#1a1a1a",padding:"5px 7px",fontSize:10,fontWeight:700,
+    letterSpacing:"0.4px",textAlign:"center",whiteSpace:"nowrap",
+    fontFamily:"'Barlow Condensed',sans-serif",...style}}>{c}</th>
+);
+
+const SumBar = ({netto}) => (
+  <div style={{display:"flex",justifyContent:"flex-end",gap:16,marginTop:8,padding:"6px 10px",
+    background:C.greenLighter,borderRadius:4,fontSize:12,fontWeight:700,color:C.greenDark,
+    fontFamily:"'Barlow Condensed',sans-serif"}}>
+    SUMA NETTO: {zł(Math.round(netto))} &nbsp;|&nbsp; VAT 8%: {zł(Math.round(netto*0.08))} &nbsp;|&nbsp; BRUTTO: {zł(Math.round(netto*1.08))}
+  </div>
+);
+
+// Collapsible panel with button trigger
+const Panel = ({title, icon, color=C.green, children}) => {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{marginBottom:8,borderRadius:8,overflow:"hidden",
+      boxShadow:"0 1px 4px rgba(0,0,0,0.1)"}}>
+      <button onClick={()=>setOpen(o=>!o)} style={{
+        width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",
+        padding:"11px 16px",background:open?color:C.navBg,border:"none",cursor:"pointer",
+        color: open ? "#1a1a1a" : "white",
+        fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,
+        fontSize:13,letterSpacing:"0.8px",textTransform:"uppercase",transition:"background 0.2s",
+      }}>
+        <span style={{display:"flex",alignItems:"center",gap:8}}>{icon} {title}</span>
+        <span style={{fontSize:18,transition:"transform 0.25s",display:"inline-block",
+          transform:open?"rotate(180deg)":"none"}}>▾</span>
+      </button>
+      {open && (
+        <div style={{background:"white",padding:"14px 16px",
+          borderTop:`3px solid ${color}`}}>
+          {children}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Work rows table used for 3 sections
+const WorkTable = ({rows, upd}) => (
+  <div style={{overflowX:"auto"}}>
+    <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+      <thead><tr>
+        <TH c="LP." style={{width:30}}/>
+        <TH c="KATEGORIA" style={{textAlign:"left",minWidth:220}}/>
+        <TH c="CENA ZŁ/M²" style={{minWidth:80}}/>
+        <TH c="ILOŚĆ" style={{minWidth:55}}/>
+        <TH c="NETTO"/>
+        <TH c="VAT 8%"/>
+        <TH c="BRUTTO"/>
+        <TH c="STATUS" style={{minWidth:110}}/>
+      </tr></thead>
+      <tbody>
+        {rows.map((r,i)=>{
+          const n=(r.cena||0)*(r.qty||0);
+          const s=SC[r.status]||{};
+          const bg=r.status==="REZYGNACJA"?"#fff5f5":r.status==="OPÓŹNIENIE"?"#fef9c3":r.status==="ZREALIZOWANE"?"#f0fdf4":"white";
+          return (
+            <tr key={i} style={{background:bg}}>
+              <td style={{textAlign:"center",color:C.textMuted,fontSize:11,padding:"3px 5px"}}>{r.lp}</td>
+              <td style={{padding:"3px 5px"}}>
+                <input value={r.kat} onChange={e=>upd(i,"kat",e.target.value)}
+                  style={{width:"100%",padding:"3px 6px",border:`1px solid ${C.border}`,borderRadius:3,fontSize:11}}/>
+              </td>
+              <td style={{padding:"3px 4px"}}>
+                <input type="number" value={r.cena||""} onChange={e=>upd(i,"cena",e.target.value)}
+                  style={{width:"100%",padding:"3px 6px",border:`1px solid ${C.border}`,borderRadius:3,fontSize:11,textAlign:"right"}}/>
+              </td>
+              <td style={{padding:"3px 4px"}}>
+                <input type="number" value={r.qty||""} onChange={e=>upd(i,"qty",e.target.value)}
+                  style={{width:"100%",padding:"3px 6px",border:`1px solid ${C.border}`,borderRadius:3,fontSize:11,textAlign:"right"}}/>
+              </td>
+              <td style={{padding:"3px 4px"}}><RO v={zł(Math.round(n))} small/></td>
+              <td style={{padding:"3px 4px"}}><RO v={zł(Math.round(n*.08))} small/></td>
+              <td style={{padding:"3px 4px"}}><RO v={zł(Math.round(n*1.08))} small/></td>
+              <td style={{padding:"3px 4px"}}>
+                <select value={r.status} onChange={e=>upd(i,"status",e.target.value)}
+                  style={{width:"100%",padding:"3px 5px",border:`1px solid ${C.border}`,borderRadius:3,
+                    fontSize:11,background:s.bg||"white",color:s.color||C.textMain,fontWeight:s.bg?700:400}}>
+                  {STATUS_WORK_OPTIONS.map(o=><option key={o} value={o} style={{background:"white",color:C.textMain}}>{o||"–"}</option>)}
+                </select>
+              </td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  </div>
+);
+
+// ─── project defaults per ID ─────────────────────────────────────────────────
+const PROJECT_DEFAULTS = {
+  A1: { kod:"A1", klient:"Józef Robak",      tel:"555 555 555", email:"jozef.robak@gmail.com",   data:"2026-03-15", etap:"Zrealizowano" },
+  B2: { kod:"B2", klient:"Mikołaj Firmanty", tel:"600 100 200", email:"m.firmanty@gmail.com",    data:"2026-03-20", etap:"Projektowanie i pozwolenia" },
+  C3: { kod:"C3", klient:"Patryk Bujanowicz",tel:"700 200 300", email:"p.bujanowicz@gmail.com",  data:"2026-02-10", etap:"Realizacja" },
+  D4: { kod:"D4", klient:"Johnny Walker",    tel:"800 300 400", email:"j.walker@gmail.com",       data:"2026-03-20", etap:"Oferta zaakceptowana" },
+  E5: { kod:"E5", klient:"",                 tel:"",            email:"",                         data:"",           etap:"Oferta zaakceptowana" },
+  D6: { kod:"D6", klient:"",                 tel:"",            email:"",                         data:"",           etap:"Oferta zaakceptowana" },
+};
+
+// ─── main sheet component ─────────────────────────────────────────────────────
+// build: 20260429205215
