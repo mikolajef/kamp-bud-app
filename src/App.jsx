@@ -1050,14 +1050,17 @@ function PieChart({ snaps }) {
 const CRM_STATUS_STYLES = {
   "Aktywny":              {bg:"#e6fbd0",color:"#3a7d1e",border:"#b2e890"},
   "W trakcie":            {bg:"#dbeeff",color:"#1a6abf",border:"#a8cff0"},
+  "Oferta wysłana":       {bg:"#fdf6e3",color:"#92680a",border:"#f0d898"},
+  "Pytania klienta":      {bg:"#f0eafb",color:"#6b3db0",border:"#d9c8f0"},
   "Rezygnacja z oferty":  {bg:"#fbe8e8",color:"#b91c1c",border:"#fca5a5"},
+  "Do ponowienia":        {bg:"#f0f0ec",color:"#6b7280",border:"#d1d5db"},
 };
 const CRM_PRIO_STYLES = {
   "Wysoki": {bg:"#fbe8e8",color:"#b91c1c"},
   "Średni": {bg:"#fdf6e3",color:"#92680a"},
   "Niski":  {bg:"#f0f0ec",color:"#6b7280"},
 };
-const CRM_STATUS_OPTIONS = ["Aktywny","Oczekuje odpowiedzi","Brak odpowiedzi","Rezygnacja z oferty"];
+const CRM_STATUS_OPTIONS = ["Aktywny","W trakcie","Oferta wysłana","Pytania klienta","Rezygnacja z oferty","Do ponowienia"];
 const CRM_PRIO_OPTIONS   = ["Wysoki","Średni","Niski"];
 const CRM_SOURCE_OPTIONS = ["Facebook","Instagram","Google","Polecenie","Strona WWW","Inne"];
 const CRM_KEY = "kamp-bud-crm-leads";
@@ -1093,9 +1096,9 @@ const TS2 = ({v,set,opts,cm}) => {
 
 // ── CRM action status options with colors ─────────────────────────────────
 const CRM_ACTION_OPTIONS = [
-  "Oferta przesłana","Ponowienie kontaktu",
-  "Odpowiedź wysłana","Umówiono spotkanie",
-  "Rezygnacja z oferty","Brak odpowiedzi",
+  "Oferta przesłana","Ponowienie kontaktu","Klient zadał pytania",
+  "Odpowiedź wysłana","Umówiono spotkanie","Po spotkaniu – czeka",
+  "Rezygnacja z oferty","Brak odpowiedzi","Finalizacja","Zrealizowano",
 ];
 const CRM_ACTION_STYLES = {
   "Oferta przesłana":      {bg:"#dbeeff",color:"#1a6abf",border:"#a8cff0"},
@@ -1831,7 +1834,7 @@ function CRMPanel({ onDataChange }) {
     // seed with Excel data
     return [
       {id:1,imie:"Adam",nazwisko:"Adamski",email:"Biuro@cyberopieka.org",tel:"691450300",zrodlo:"Facebook",model:"106 m²",dataKontaktu:"2026-04-22",ostatniaAkcja:"Oferta przesłana",dataAkcji:"2026-04-27",nastepneDzialanie:"Ponowienie kontaktu",dataNastepnego:"2026-04-24",status:"Aktywny",priorytet:"Wysoki",notatki:"Zainteresowany modelem 106, pyta o garaż",odpowiedzialny:"Mikołaj",kontakty:2},
-      {id:2,imie:"Sebastian",nazwisko:"Subocz",email:"suboczsebastian@gmail.com",tel:"666555145",zrodlo:"Facebook",model:"106 m²",dataKontaktu:"2026-04-08",ostatniaAkcja:dataAkcji:"2026-04-09",nastepneDzialanie:"Odpowiedź na pytania",dataNastepnego:"2026-04-15",status:"W trakcie",priorytet:"Wysoki",notatki:"Pytania o finansowanie i czas realizacji",odpowiedzialny:"Mikołaj",kontakty:3},
+      {id:2,imie:"Sebastian",nazwisko:"Subocz",email:"suboczsebastian@gmail.com",tel:"666555145",zrodlo:"Facebook",model:"106 m²",dataKontaktu:"2026-04-08",ostatniaAkcja:"Klient zadał pytania",dataAkcji:"2026-04-09",nastepneDzialanie:"Odpowiedź na pytania",dataNastepnego:"2026-04-15",status:"W trakcie",priorytet:"Wysoki",notatki:"Pytania o finansowanie i czas realizacji",odpowiedzialny:"Mikołaj",kontakty:3},
       {id:3,imie:"Piotr",nazwisko:"Zając",email:"p.zajac@onet.pl",tel:"505058371",zrodlo:"Facebook",model:"106 m²",dataKontaktu:"2026-03-25",ostatniaAkcja:"Ponowienie kontaktu",dataAkcji:"2026-04-01",nastepneDzialanie:"Telefoniczny follow-up",dataNastepnego:"2026-04-20",status:"W trakcie",priorytet:"Średni",notatki:"Odwiedził dom pokazowy, rozważa mniejszy model",odpowiedzialny:"Mikołaj",kontakty:4},
       {id:4,imie:"Maria",nazwisko:"Wiśniewska",email:"m.wisniewska@gmail.com",tel:"886518533",zrodlo:"Facebook",model:"106 m²",dataKontaktu:"2026-04-15",ostatniaAkcja:"Oferta przesłana",dataAkcji:"2026-04-15",nastepneDzialanie:"Czeka na decyzję",dataNastepnego:"2026-04-30",status:"Aktywny",priorytet:"Wysoki",notatki:"Polecona przez klienta Robaka, decyzja do końca miesiąca",odpowiedzialny:"Mikołaj",kontakty:1},
       {id:5,imie:"Tomasz",nazwisko:"Dąbrowski",email:"t.dabrowski@interia.pl",tel:"696022450",zrodlo:"Facebook",model:"106 m²",dataKontaktu:"2026-02-10",ostatniaAkcja:"Rezygnacja z oferty",dataAkcji:"2026-03-01",nastepneDzialanie:"Brak",dataNastepnego:"2026-04-23",status:"Rezygnacja z oferty",priorytet:"Niski",notatki:"Wybrał inną firmę – cena",odpowiedzialny:"Mikołaj",kontakty:5},
